@@ -1,0 +1,30 @@
+KNOWN RELATED PAIRS (from names / duplicate groups), and where the alignment ranked them among 224115 pairs
+SEL/al_dawr_ala_meen ~ /al_dawr_ala_meen_1678957498            z= 757.3  rank=    2  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/al_hal ~ GEN/al_hal_1486538140                             z= 567.1  rank=   11  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/ana_min_akhiraha ~ /ana_min_akhiraha_3139827573            z= 333.9  rank=   58  mutual-nearest=False  | generated-conditioner<->selected-transcr
+SEL/awwal_ma_bashufak ~ awwal_ma_bashufak_2804689095           z= 525.6  rank=   21  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/badeet_atib ~ GEN/badeet_atib_1004225608                   z= 363.2  rank=   51  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/bafakker_bil_sa3at ~ afakker_bil_sa3at_3691473400          z= 203.0  rank=   76  mutual-nearest=False  | generated-conditioner<->selected-transcr
+SEL/feen_layalik ~ GEN/feen_layalik_1545590519                 z= 564.8  rank=   12  mutual-nearest=False  | generated-conditioner<->selected-transcr
+SEL/fustan_alhelwa ~ EN/fustan_alhelwa_2949782446              z= 353.2  rank=   52  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/ghayb ~ GEN/ghayb_856076302                                z= 206.9  rank=   75  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/habeetak ~ GEN/habeetak_4196876890                         z= 289.4  rank=   64  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/hazak_ya_albi ~ GEN/hazak_ya_albi_3645837629               z= 698.3  rank=    4  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/leh_aljarh ~ GEN/leh_aljarh_4175830000                     z= 439.3  rank=   37  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/lilhin_ayesh ~ GEN/lelheen_3ayesh_562555061                z= 375.6  rank=   48  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/lissa_alhala_matasarish ~ alhala_matasarish_4141123054     z= 417.0  rank=   44  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/ma3_alsalama ~ GEN/ma3_alsalama_2149548030                 z= 221.7  rank=   73  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/ma_khalas ~ GEN/ma_khalas_2325284485                       z= 370.8  rank=   49  mutual-nearest=False  | generated-conditioner<->selected-transcr
+SEL/mata_habibi_mata ~ /mata_habibi_mata_1124512995            z= 428.2  rank=   40  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/min_kothr_hobbi_feek ~ _kothr_hobbi_feek_4222279465        z= 351.8  rank=   53  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/saharni_alshawq ~ EN/saharni_alshawq_363209276             z= 300.4  rank=   60  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/saneen_alshawq ~ GEN/saneen_alshawq_558895102              z= 434.8  rank=   38  mutual-nearest=False  | generated-conditioner<->selected-transcr
+SEL/waynak_habib ~ GEN/waynak_habib_2204908989                 z= 454.4  rank=   33  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/ya_hawa_alghaleen ~ /ya_hawa_alghaleen_582164616           z= 545.9  rank=   17  mutual-nearest=True  | generated-conditioner<->selected-transcr
+SEL/ya_takoon_habibi ~ N/ya_tkoon_habibi_2757273608            z= 418.2  rank=   43  mutual-nearest=False  | generated-conditioner<->selected-transcr
+00/shard-01/0299_xF5MexEUoOQ ~ 00/shard-21/0261_byK0dlhokOA    z= 679.3  rank=    5  mutual-nearest=True  | YT500 duplicate group
+00/shard-02/0054_Pz59wizOqLw ~ 00/shard-19/0181_QS0v8uxzfJM    z= 815.2  rank=    1  mutual-nearest=True  | YT500 duplicate group
+00/shard-11/0220_nzbd8Zra2cY ~ 00/shard-24/0637_t58Atvs7e1k    z=  -0.5  rank=156034  mutual-nearest=False  | YT500 duplicate group
+00/shard-13/0613_yQMn7cOmnYs ~ 00/shard-23/0339_PiPu_1FSrhQ    z= 452.3  rank=   35  mutual-nearest=True  | YT500 duplicate group
+00/shard-22/0413_ikcfOn9VzYo ~ 00/shard-23/0070_WtmVYOtqz98    z=   1.5  rank=26517  mutual-nearest=False  | YT500 duplicate group
+mutual nearest neighbours: 20 / 28 known pairs

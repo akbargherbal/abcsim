@@ -1,0 +1,2 @@
+KNOWN RELATED PAIRS (from names / duplicate groups), and where the alignment ranked them among 224115 pairs
+mutual nearest neighbours: 0 / 0 known pairs
