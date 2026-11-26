@@ -1,0 +1,45 @@
+{
+  "threshold": 0.05,
+  "bank": {
+    "songs": 596,
+    "hashes": 249371,
+    "bytes": 1027894,
+    "sketch": false,
+    "n": 8
+  },
+  "positives": {
+    "n": 47,
+    "min": 0.015313935681470138,
+    "p10": 0.17866666666666667,
+    "p25": 0.2932692307692308,
+    "p50": 0.46292585170340683,
+    "p75": 0.5409429280397022,
+    "p90": 0.6763848396501457,
+    "max": 0.8846153846153846,
+    "mean": 0.4362618293216886
+  },
+  "positives_at_or_above": 46,
+  "negatives": {
+    "n": 2968,
+    "min": 0.0,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0,
+    "max": 0.0165016501650165,
+    "mean": 0.0001664741873171075
+  },
+  "false_positives": 0,
+  "false_positive_rate": 0.0,
+  "example": "closest=none containment=0.000 matched=0.0 beats status=ok",
+  "example_containment": 0.0,
+  "positive_misses": [
+    {
+      "containment": 0.015,
+      "cluster": "C029",
+      "member": "suno-0098.abc",
+      "representative": "suno-0120.abc"
+    }
+  ]
+}

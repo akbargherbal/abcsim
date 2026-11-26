@@ -45,6 +45,32 @@ def sw_pair(iva, rca, wa, ivb, rcb, gap, mis):
     return best, bsi - 1, bi - 1, bsj - 1, bj - 1
 
 
+@njit(cache=True, fastmath=True)
+def nw_score(iva, rca, ivb, rcb, gap, mis):
+    """Global (Needleman-Wunsch) score with unit match reward.
+
+    Used only as a rescue gate: a pair that passes the unweighted local
+    coverage test but has a negative whole-song global score is sharing a
+    section, not the song.
+    """
+    n = len(iva); m = len(ivb)
+    prev = np.zeros(m + 1, np.float32); cur = np.zeros(m + 1, np.float32)
+    for j in range(1, m + 1):
+        prev[j] = prev[j - 1] - gap
+    for i in range(1, n + 1):
+        cur[0] = prev[0] - gap
+        ai = iva[i - 1]; ar = rca[i - 1]
+        for j in range(1, m + 1):
+            s = 1.0 if (ai == ivb[j - 1] and ar == rcb[j - 1]) else -mis
+            d = prev[j - 1] + s
+            u = prev[j] - gap
+            l = cur[j - 1] - gap
+            cur[j] = max(d, u, l)
+        for j in range(m + 1):
+            prev[j] = cur[j]
+    return prev[m]
+
+
 @njit(cache=True)
 def sw_many(ivs, rcs, ws, offs, pairs, gap, mis):
     P = len(pairs)

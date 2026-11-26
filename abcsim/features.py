@@ -21,7 +21,7 @@ def tokens_from_notes(notes):
 def song_stream(abc_text, voice=None):
     s = parse_abc(abc_text)
     v = voice or lead_voice(s)
-    if v is None:
+    if v is None or v not in s.voices:
         return None
     notes = s.voices[v]
     tk = tokens_from_notes(notes)

@@ -7,3 +7,8 @@ build/
 dist/
 *.egg-info/
 .venv/
+
+# generated heavy artifacts (reproducible; see abcsim/README.md)
+out/corpus_dedup/
+out/index_vocal.pkl
+out/pairs_raw_vocal.npz

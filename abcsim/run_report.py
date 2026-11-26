@@ -3,19 +3,14 @@ Outputs: out/top_pairs.csv, out/groundtruth.txt, out/null_hist.png"""
 import sys, os, pickle, csv, difflib, re, collections
 sys.path.insert(0, os.path.dirname(__file__))
 import numpy as np
+from stats import null_model
 
 outd = sys.argv[1] if len(sys.argv) > 1 else 'out'; os.makedirs(outd, exist_ok=True)
 idx = pickle.load(open(os.path.join(outd, 'index.pkl'), 'rb'))
 d = np.load(os.path.join(outd, 'pairs_raw.npz')); pairs = d['pairs']; res = d['res']
 meta = idx['meta']; offs = idx['offs']; n = len(meta)
-ntok = np.diff(offs)
 score = res[:, 0].astype(np.float64)
-x = np.log(ntok[pairs[:, 0]] * ntok[pairs[:, 1]].astype(np.float64))
-A = np.vstack([np.ones_like(x), x]).T
-coef, *_ = np.linalg.lstsq(A, score, rcond=None)
-resid = score - A @ coef
-sig = 1.4826 * np.median(np.abs(resid - np.median(resid)))
-z = (resid - np.median(resid)) / sig
+coef, sig, z = null_model(idx, pairs, res)
 print('null model: score = %.2f + %.2f*log(nA*nB); robust sigma %.2f' % (coef[0], coef[1], sig))
 print('median score of unrelated-looking pairs: %.1f ; 99th pct %.1f ; 99.99th pct %.1f' % (
     np.median(score), np.percentile(score, 99), np.percentile(score, 99.99)))
@@ -95,7 +90,7 @@ for k in rank_all[:300]:
                      approx_seconds=round(ab * 60 / tempo, 1), trivial_fraction=triv, distinct_tokens=distinct,
                      known_relation=rel.get(frozenset((int(a), int(b))), '')))
 with open(os.path.join(outd, 'top_pairs.csv'), 'w', newline='', encoding='utf-8') as f:
-    w = csv.DictWriter(f, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
+    w = csv.DictWriter(f, fieldnames=list(rows[0].keys()), lineterminator='\n'); w.writeheader(); w.writerows(rows)
 
 unk = [r for r in rows if not r['known_relation']]
 print('\nTOP UNKNOWN-RELATION PAIRS')
