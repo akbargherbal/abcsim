@@ -1,7 +1,7 @@
 # abcsim maintenance plan: feeding `abc-score-writer` v0.2.3
 
 **Audience:** the AI agent that maintains `abcsim`.
-**Goal:** turn abcsim's similarity results into assets that make the `abc-score-writer` skill (v0.2.2) more accurate, without making the skill's agent slower.
+**Goal:** turn abcsim's similarity results into assets that make the [`abc-score-writer`](https://github.com/akbargherbal/abc_score_composer.git) skill (v0.2.2) more accurate, without making the skill's agent slower.
 
 ## 0. Context and hard constraints
 
