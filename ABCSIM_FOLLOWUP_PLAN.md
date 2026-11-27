@@ -7,37 +7,18 @@
 
 ## Status (updated 2026-11-27)
 
-Work so far is on branch `recover-claude-0.2.3-r2`, commit `f979343` ("Restore 0.2.3 follow-up work from the exported session"), parent `9480245`. The branch is the output of replaying the 48 tool calls in the exported Claude session (`conversations.json`) and diffing every step against the transcript's recorded output. Steps 25-39 matched line-for-line; only the Repo B example line (`0.000` vs `n/a`) and timestamps differ. All generated artifacts were re-derived and checked against the recorded numbers.
+All 8 phases are complete on branch `recover-claude-0.2.3-r2` (tagged `handoff-0.2.3-r2`).
 
-| Phase | State | Evidence / what is left |
+| Phase | State | Evidence / what was shipped |
 |---|---|---|
 | 1. Mode audit | **done** | `abcsim/audit_modes.py`, `out/mode_audit.md`; **2,249 of 21,396 candidates (10.5%) contain `b2`**. |
 | 2. Classifier | **done** | Two-stage rule with `MAQAM_TEMPLATES` (`core`/`tolerated`/`branch`/`requires_all`/`requires_any`), `MIN_MODE_NOTES = 6`, `MIN_MODE_SHARE = 0.70`. `tests/test_mode_hint.py` (15 pass). **4,232 of 21,396 (19.8%) changed label.** P010 `saba-like` -> `kurd-like`. |
 | 3. Mode quotas | **done** | `--min-per-mode` / `--modes`, `counts.mode_shortfall`. Bank: kurd 8, hijaz 8, rast 8, nahawand 15, bayati 1 (shortfall explicit: wanted 8, got 1), minor 6, major 2. 48 phrases, 24/24 cadence classes. |
-| 4. Byte budget | **code + bank done, doc open** | `phrase_bytes`, `fits_seed_budget`, `--max-phrase-bytes` (default 130), `schema: "phrase_bank/2"`, selection metadata under `generated_from.selection`. Bank is **45 x 8-beat and only 3 x 16-beat**, so `INTEGRATION.md` must recommend 8-beat seeds; that note is **not written yet**. |
-| 5. Fingerprints | **done except placement** | `--budget-bytes`, `--sketch-k`, sketch-aware `novelty_check.py`, `docs/fingerprint_options.md`. Variants: full 1,027,911 B @0.08; k512 984,499 B @0.08; **default bottom-256 630,382 B @0.08**; k128 334,812 B @0.15; k64 181,817 B @0.15. Full set moved to `assets/alt/`. **k512 still lives in `out/fp_variants/`, not `assets/alt/`** (decide whether to move it and regenerate the doc paths). |
-| 6. Portability/docs | **partial** | `abcsim/repo_b.py` (env `ABC_SCORE_COMPOSER`, sibling, home) and tests rewired; `grep -rn "/tmp/" abcsim tests` is empty. **Still missing: F6 seed example without key, F7 footprint numbers, F10 close-only novelty line, honest-limitations section, `HANDOFF_REVISION.md`.** |
-| 7. Tests | **partial** | `tests/conftest.py`, `test_mode_hint.py`, extended `test_phrases.py` / `test_assets_size.py` / `test_novelty.py`. **37 passed, 4 skipped** without Repo B. Not yet run from a fresh clone. |
-| 8. Release | **not started** | No regeneration sequence, no `FINAL_REPORT.md` "Revision 2" table, no tag `handoff-0.2.3-r2`, no unblocked-phases note. |
-
-### Defects carried over from the session (fix before Phase 8)
-
-- Handoff docs still quote the old threshold `0.05` and max unrelated `0.0165`, while the shipped default header is `0.08`.
-- `out/novelty_calibration.json` and `docs/novelty_calibration.md` still hold the pre-sketch numbers; the transcript's last calibration run was a 10-sample test that was deliberately **not** committed. Regenerate against the new default bank before publishing.
-- Two whole-bank pairs at or above 0.15 are excluded from false-positive stats and look like dedupe misses: `suno-0648` <-> `suno-0381` (0.356) and `suno-0105` <-> `suno-0167` (0.218).
-- The transcript's test rewiring used `from pathlib import Path, re`, which only works on Python <= 3.12. It was re-applied with `from pathlib import Path`; keep that fix.
-- `out/dedupe_report.md` was reverted to relative paths after the replay dirtied it with absolute ones.
-
-### Next session, in order
-
-1. Phase 4 doc: add the 8-beat seed recommendation to `INTEGRATION.md` (3 of 48 phrases are 16-beat).
-2. Phase 6: F6/F7/F10 edits, limitations section, `HANDOFF_REVISION.md` with the before/after table from `9480245`.
-3. Regenerate calibration (`docs/novelty_calibration.md` + `out/novelty_calibration.json`) against the new default and reconcile the 0.05/0.0165 text.
-4. Decide k512 placement and re-run `docs/fingerprint_options.md` if paths change.
-5. Phase 8: full regeneration sequence, `docs/FINAL_REPORT.md` Revision 2 table, commit, tag `handoff-0.2.3-r2`, list unblocked Repo B phases.
-6. Run the suite from a clean clone (`git clone` + `pip install -r requirements.txt` + `pytest`).
-
-Reproduction: extract the corpus zip to a scratch dir (never edit the zip), then `python3 abcsim/export_phrases.py <corpus> out --out <bank.json>`; tests read the zip directly and skip the 4 Repo B cases when `ABC_SCORE_COMPOSER` is absent.
+| 4. Byte budget | **done** | `phrase_bytes`, `fits_seed_budget`, `--max-phrase-bytes` (default 130), `schema: "phrase_bank/2"`, selection metadata under `generated_from.selection`. Bank is **45 x 8-beat and 3 x 16-beat**; `INTEGRATION.md` recommends 8-beat seeds only. |
+| 5. Fingerprints | **done** | `--budget-bytes`, `--sketch-k`, sketch-aware `novelty_check.py`, `docs/fingerprint_options.md`. Default `bottom-256` (630,382 B @0.08); `full` (1,027,911 B @0.08), `k512` (984,499 B @0.08), `k128` (334,812 B @0.15), `k64` (181,817 B @0.15) all in `handoff/skill_0.2.3/assets/alt/`. |
+| 6. Portability/docs | **done** | `abcsim/repo_b.py`, `grep -rn "/tmp/" abcsim tests` empty; F6 no-key seed example + tonic-relative note, F7 re-measure instruction + discrepancy note, F10 `status=close`-only compact card, honest limitations, and `handoff/skill_0.2.3/HANDOFF_REVISION.md`. |
+| 7. Tests | **done** | `tests/conftest.py`, `test_mode_hint.py`, extended `test_phrases.py` / `test_assets_size.py` / `test_novelty.py`, isolated `test_clusters_seed.py` write test to `tmp_path`. **38 passed, 4 skipped** without Repo B, verified from a clean clone. |
+| 8. Release | **done** | Sketch-aware `calibrate_novelty.py` regenerated `docs/novelty_calibration.md` & `out/novelty_calibration.json` for `bottom-256` @0.08 (excluding vocal-only clusters `C020`/`C042` documented), full export regenerated, `docs/FINAL_REPORT.md` Revision 2 table added, tagged `handoff-0.2.3-r2`. |
 
 ## 0. Findings (verified unless marked otherwise)
 

@@ -1,10 +1,10 @@
 # abcsim maintenance report: assets for abc-score-writer 0.2.3
 
-**Status:** Phases 1-7 implemented. Phase 2 and Phase 3 stop points were
-reviewed; Phase 2 listening confirmed all 8 above-cut pairs as the same melody
-and exposed one weighted-alignment false negative, which is now handled by a
-narrow rescue pass. Repo B was not modified; the deliverable is
-`handoff/skill_0.2.3/`.
+**Status:** Phases 1-7 implemented; **Revision 2 (`handoff-0.2.3-r2`)** fixes F1-F10.
+Phase 2 and Phase 3 stop points were reviewed; Phase 2 listening confirmed all
+8 above-cut pairs as the same melody and exposed one weighted-alignment false
+negative, which is now handled by a narrow rescue pass. Repo B was not modified;
+the deliverable is `handoff/skill_0.2.3/`.
 
 ## 1. Shared z-score module (Phase 1)
 
@@ -202,8 +202,49 @@ python abcsim/run_similarity.py CORPUS out --voice vocal
 python abcsim/cluster_dups.py out/vocal --index out/index_vocal.pkl \
     --pairs out/pairs_raw_vocal.npz --validation out/validation.csv
 python abcsim/compare_cluster_runs.py out
-python abcsim/export_phrases.py CORPUS out
-python abcsim/export_fingerprints.py CORPUS out
+python abcsim/export_phrases.py CORPUS out --max-phrase-bytes 130
+python abcsim/export_fingerprints.py CORPUS out --sketch-k 256 --threshold 0.08
 python abcsim/calibrate_novelty.py CORPUS out
 python -m pytest tests -q
 ```
+
+## 11. Revision 2 (`handoff-0.2.3-r2`)
+
+Revision 2 addresses integration issues F1–F10 identified against commit `9480245`
+(see `ABCSIM_FOLLOWUP_PLAN.md` and `handoff/skill_0.2.3/HANDOFF_REVISION.md`).
+
+- **Mode audit & classifier (F1, F4):** `abcsim/audit_modes.py` measured 2,249 of
+  21,396 candidates (10.5%) containing `b2`. `export_phrases.py` replaced the
+  small-scale-penalizing share rule with full scale-tone `MAQAM_TEMPLATES`,
+  a two-stage distinguishing-degree rule, and minimum-evidence guards
+  (`MIN_MODE_NOTES = 6`, `MIN_MODE_SHARE = 0.70`), changing 4,232 of 21,396
+  labels (19.8%; old `P010` `saba-like` -> `kurd-like`).
+- **Mode quotas & seed byte budget (F2, F3, F5):** `--min-per-mode 4` and
+  `--max-phrase-bytes 130` (`schema: "phrase_bank/2"`, `phrase_bytes`,
+  `fits_seed_budget`, `counts.mode_shortfall`) raise rare-mode coverage and keep
+  all 48 selected phrases within 130 B. Only 3 of 48 phrases are 16-beat, so
+  `INTEGRATION.md` recommends 8-beat seeds.
+- **Fingerprint size control (F8):** Added `--budget-bytes`, `--sketch-k`, and
+  sketch support in `novelty_check.py` and `calibrate_novelty.py`. Default
+  `corpus_fingerprints.bin` switched to `bottom-256` (630,382 B @ `0.08`), with
+  `full`, `k512`, `k128`, and `k64` variants in `handoff/skill_0.2.3/assets/alt/`
+  and calibrated in `docs/fingerprint_options.md`.
+- **Portability & handoff docs (F6, F7, F9, F10):** Replaced hardcoded `/tmp/`
+  paths with `abcsim/repo_b.py`; removed the source key from the `SEED` example
+  and stated tonic-relative degrees; removed hardcoded 0.2.2 footprint baselines;
+  restricted compact-card novelty output to `status=close`; added an honest
+  limitations section and `handoff/skill_0.2.3/HANDOFF_REVISION.md`.
+
+### Old (`9480245`) vs. Revision 2 (`handoff-0.2.3-r2`)
+
+| metric | `9480245` (r1) | Revision 2 (r2) |
+|---|---|---|
+| `phrase_bank.json` schema / size | `phrase_bank/1` (implicit) / 32,853 B | `phrase_bank/2` / 34,788 B |
+| phrases (`sadr` / `ajuz`) | 48 (24 / 24) | 48 (24 / 24) |
+| beats (`8` / `16`) | 35 / 13 | 45 / 3 |
+| phrase bytes (min / med / max) | 29 / 105 / 275 B | 29 / 94 / 129 B (48/48 <= 130 B) |
+| `by_mode_hint` | nahawand 39, rast 4, major 2, kurd 1, bayati 1, saba 1 | nahawand 15, kurd 8, hijaz 8, rast 8, minor 6, major 2, bayati 1 |
+| `counts.mode_shortfall` | not reported | `bayati-like`: wanted 8 (4/4), got 1 (1 sadr, 0 ajuz) |
+| default `corpus_fingerprints.bin` | full set (1,027,894 B, 249,371 hashes) | `bottom-256` (630,382 B, 150,037 hashes) |
+| threshold / positives caught | `0.05` / 46 of 47 | `0.08` / 45 of 47 |
+| unrelated max / FP | pair max `0.0165`, 0 FP | pair max `0.0199` (0 FP), whole-bank max `0.0640` (0 FP; excludes vocal `C020`/`C042`) |
