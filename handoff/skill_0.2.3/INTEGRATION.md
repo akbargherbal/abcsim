@@ -46,8 +46,12 @@ Suggested filter for each lyric line:
 Print at most three, each one line, and cap the whole block at **400 bytes**:
 
 ```
-SEED P012 sadr 16 beats Gm  b3:.5 4:.5 5:1 4:.5 b3:.5 2:1 ...
+SEED P012 sadr 8b 4:.5 5:1 b3:.5 ...
 ```
+
+**Degrees are tonic-relative** (no key or transposition is carried in the phrase
+string; `1` is the song's tonic in octave 4, with `+`/`-` octave suffixes). Do not
+print a source key in the `SEED` line.
 
 Every phrase carries `phrase_bytes` and `fits_seed_budget`; the bank was built
 with `--max-phrase-bytes 130`, so all 48 phrases fit the 130-byte seed budget
@@ -83,20 +87,27 @@ subprocess.run([
 Output is at most one line:
 
 ```
-NOVELTY closest=suno-0123.abc containment=0.123 matched=8.4 beats status=ok
+NOVELTY closest=suno-0123.abc containment=0.123 matched=8.4 beats status=close
 ```
 
-- `status=ok` below containment 0.05; `status=close` at or above it.
+- `status=ok` below the bank's threshold (**0.08** for the shipped `bottom-256`
+  default); `status=close` at or above it (`novelty_check.py` reads the
+  threshold from the `.bin` header unless `--threshold` is passed).
+- **Compact vs. verbose output:** print the compact-card line **only when
+  `status=close`** (so a normal `status=ok` build adds zero words to the compact
+  success card); always print in verbose mode.
 - Advisory only, in the same spirit as CRAFT flags. Do **not** fail a build,
   block release, or rewrite the melody automatically because of it.
 - If `status=close`, mention the closest song/containment in the report and let
   the user decide.
 - The script is stdlib-only and runs in ~0.3 s on a 30-bar score.
 
-Threshold and false-positive rate are in
-`docs/novelty_calibration.md` in the abcsim repository: containment >= 0.05,
-0 false positives on 2,968 unrelated pairs, maximum unrelated containment
-0.0165, Repo B's example song 0.000.
+Threshold and false-positive rate for the shipped `bottom-256` default
+(630,382 B) are in `docs/novelty_calibration.md` in the abcsim repository
+(alternatives `full`, `k512`, `k128`, `k64` are in `assets/alt/` and compared in
+`docs/fingerprint_options.md`): containment >= **0.08**, 45 / 47 cluster
+positives caught, 0 false positives on 2,968 unrelated pairs (max 0.0199) and 0
+false positives on 592 whole-bank unrelated queries (max 0.0640, p99 0.0414).
 
 ## 3. Candidate corpus profile: not adopted
 
@@ -116,20 +127,20 @@ record the change; no code change is needed.
 
 ## 4. Footprint
 
-Measured with Repo B `scripts/measure_footprint.py` on a copy with this handoff
-applied:
+Re-measure with Repo B's `scripts/measure_footprint.py` on the target commit;
+the abcsim handoff adds **no mandatory reading**.
 
-| metric | 0.2.2 | proposed 0.2.3 |
-|---|---|---|
-| SKILL.md | 5,824 B | 5,824 B |
-| mandatory reading | 26,484 B | 26,484 B |
-| example fill written | 1,241 B | 1,241 B |
-| blueprint / skeleton | 3,444 / 1,352 B | 3,444 / 1,352 B |
-| inspector success / failure | 11 / 20 words | 11 / 20 words |
-| new optional output | 0 | <= 400 B phrases + <= 120 B novelty |
-
-Mandatory reading does **not** grow. The phrase bank and fingerprint file are
-read by scripts only.
+- Mandatory reading does **not** grow: `phrase_bank.json` (34,788 B) and
+  `corpus_fingerprints.bin` (630,382 B) are read by scripts only and never
+  loaded into the agent's context.
+- Optional script output: `<= 400 B` for intake seeds, `0 B` on the compact
+  success card when `status=ok`, and `<= 120 B` only when `status=close` or in
+  verbose mode.
+- Note on earlier numbers: the initial 0.2.3 draft cited 0.2.2 baseline figures
+  of `5,824 B` (`SKILL.md`), `26,484 B` (mandatory reading), and `11 / 20` words
+  (inspector success/failure), whereas Repo B's 0.2.2 changelog recorded
+  `5,808 B`, `26,468 B`, and `13 / 32` words. Always measure directly against the
+  target Repo B commit.
 
 ## 5. Verification
 
@@ -137,17 +148,38 @@ From the abcsim repository:
 
 ```bash
 python -m pytest tests/test_phrases.py tests/test_token_parity.py \
-                 tests/test_novelty.py tests/test_assets_size.py -q
+                 tests/test_novelty.py tests/test_assets_size.py \
+                 tests/test_mode_hint.py -q
 ```
 
 From a Repo B copy with the handoff applied:
 
 ```bash
 python scripts/novelty_check.py assets/example_song.abc --assets assets
-# NOVELTY closest=none containment=0.000 matched=0.0 beats status=ok
+# NOVELTY closest=... containment=... matched=... beats status=ok
 ```
 
-## 6. Rollback
+## 6. Limitations
 
-Delete the three assets and `scripts/novelty_check.py`. No existing Repo B file
-is modified by this handoff, so rollback is a file deletion.
+What these assets do **not** show or guarantee:
+
+- **Seeds are unproven to improve generation:** the bank supplies real corpus
+  contours, not an A/B-tested quality boost.
+- **`role_hint` is heuristic:** the corpus has no lyrics, so `sadr`/`ajuz` is
+  inferred from cadence and phrase length only.
+- **Register and mode coverage are skewed:** the bank is predominantly mid/high
+  register (`16` mid, `29` high, `3` low; `45` at 8 beats and `3` at 16 beats),
+  and `bayati-like` has only `1` phrase (`counts.mode_shortfall`).
+- **AI-generated source corpus:** the 670 files are Suno outputs transcribed by
+  SheetSage2, with 12-TET quantization (no quarter-tones) and no quality/rating
+  filter.
+- **Exact 8-gram matching misses rhythmic variants:** 2 of 47 cluster pairs
+  score below `0.08` with `bottom-256` (1 of 47 scored below `0.05` in the
+  earlier full-set check). Sketch `matched=` beats is a lower bound and requires
+  at least 3 matching n-grams.
+
+## 7. Rollback
+
+Delete the three assets (plus `assets/alt/` if copied) and
+`scripts/novelty_check.py`. No existing Repo B file is modified by this handoff,
+so rollback is a file deletion.

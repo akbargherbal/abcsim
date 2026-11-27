@@ -4,16 +4,20 @@
 ## 0.2.3
 
 ### Added (all optional; no mandatory reading added)
-- `assets/phrase_bank.json`: 48 real vocal phrases from the deduped 599-song
-  SheetSage2 corpus, in the Blueprint `degree:beats` grammar. Intake may print
-  at most 2-3 matching phrases as optional seeds (<= 400 bytes). The file is
-  read by a script, not by the agent.
+- `assets/phrase_bank.json`: 48 real vocal phrases (`schema: "phrase_bank/2"`,
+  34,788 bytes) from the deduped 599-song SheetSage2 corpus, in the Blueprint
+  tonic-relative `degree:beats` grammar. All 48 phrases fit `phrase_bytes <= 130`
+  (45 x 8-beat, 3 x 16-beat). Intake may print at most 2-3 matching 8-beat
+  phrases as optional seeds (<= 400 bytes). Read by a script, not by the agent.
 - `scripts/novelty_check.py`: stdlib-only advisory check for how close a
-  compiled melody is to the deduped corpus. `validate_and_inspect.py` may call
-  it after the CRAFT lines and print one line (<= 120 bytes). It is advisory,
-  not a release gate.
+  compiled melody is to the deduped corpus (supports full sets and bottom-k
+  sketches). `validate_and_inspect.py` may call it after the CRAFT lines; print
+  in the compact card only when `status=close` (<= 120 bytes) and always in
+  verbose mode. Advisory only, not a release gate.
 - `assets/corpus_fingerprints.bin`: 8-token novelty hashes for 596 deduped
-  representatives (249,371 hashes, 1,027,894 bytes, full set, no sketch).
+  representatives (`bottom-256` sketch, 150,037 hashes, 630,382 bytes, stamped
+  threshold `0.08`). Full-set (`full`, 1,027,911 B @0.08) and alternative
+  sketch sizes (`k512`, `k128`, `k64`) are provided under `assets/alt/`.
 
 ### Changed
 - None. `assets/corpus_profile.json` is unchanged.
@@ -24,15 +28,11 @@
   3.6% of the full-corpus IQR (threshold 10%), so the recommendation is to
   **keep the current profile**. The candidate is included only for inspection.
 
-### Footprint (measured with `scripts/measure_footprint.py`)
-| metric | 0.2.2 | proposed 0.2.3 |
-|---|---|---|
-| SKILL.md | 5,824 B | 5,824 B |
-| mandatory reading | 26,484 B | 26,484 B |
-| example fill written | 1,241 B | 1,241 B |
-| blueprint / skeleton | 3,444 / 1,352 B | 3,444 / 1,352 B |
-| inspector success / failure | 11 / 20 words | 11 / 20 words |
-| new optional output | 0 | <= 400 B phrases + <= 120 B novelty |
-
-The large assets are script-only and never loaded into the agent's context.
+### Footprint
+Re-measure with Repo B's `scripts/measure_footprint.py` on the target commit;
+the abcsim handoff adds no mandatory reading. Optional output when triggered:
+<= 400 B for intake seeds, and <= 120 B for novelty only when `status=close` or
+in verbose mode. (Note: the initial 0.2.3 draft cited 0.2.2 figures of
+`5,824 B` / `26,484 B` / `11 / 20` words vs Repo B's 0.2.2 changelog values of
+`5,808 B` / `26,468 B` / `13 / 32` words; always measure against the target commit.)
 ```
