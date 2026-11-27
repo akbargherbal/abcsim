@@ -46,6 +46,11 @@ The recommended threshold is the smallest value on the grid 0.02, 0.03, 0.04, 0.
 of the unrelated-pair maximum and the whole-bank unrelated maximum (excluding likely related pairs). It is recomputed per variant;
 0.05 is not reused unless it satisfies this rule.
 
+Excluded whole-bank pairs at or above 0.15 (`likely_related`):
+
+- `suno-0105.abc` <-> `suno-0167.abc` (max 0.286): known vocal-only duplicate cluster C020 (missed by lead-only dedupe).
+- `suno-0381.abc` <-> `suno-0648.abc` (max 0.404): known vocal-only duplicate cluster C042 (missed by lead-only dedupe).
+
 ## Recommendation
 
 Rule: the smallest file whose recommended threshold has zero false positives on both unrelated sets, catches at least (full-set caught - 2) positives, and detects at least 90% of spliced 80-n-gram passages (about 20 seconds of melody).

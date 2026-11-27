@@ -1,24 +1,25 @@
 {
-  "threshold": 0.05,
+  "threshold": 0.08,
   "bank": {
     "songs": 596,
-    "hashes": 249371,
-    "bytes": 1027894,
-    "sketch": false,
+    "hashes": 150037,
+    "bytes": 630382,
+    "sketch": true,
+    "k": 256,
     "n": 8
   },
   "positives": {
     "n": 47,
-    "min": 0.015313935681470138,
-    "p10": 0.17866666666666667,
-    "p25": 0.2932692307692308,
-    "p50": 0.46292585170340683,
-    "p75": 0.5409429280397022,
-    "p90": 0.6763848396501457,
+    "min": 0.0,
+    "p10": 0.19090909090909092,
+    "p25": 0.2821576763485477,
+    "p50": 0.46825396825396826,
+    "p75": 0.5538461538461539,
+    "p90": 0.6717557251908397,
     "max": 0.8846153846153846,
-    "mean": 0.4362618293216886
+    "mean": 0.43827979706768116
   },
-  "positives_at_or_above": 46,
+  "positives_at_or_above": 45,
   "negatives": {
     "n": 2968,
     "min": 0.0,
@@ -27,19 +28,65 @@
     "p50": 0.0,
     "p75": 0.0,
     "p90": 0.0,
-    "max": 0.0165016501650165,
-    "mean": 0.0001664741873171075
+    "max": 0.019933554817275746,
+    "mean": 4.481411917134089e-05
   },
   "false_positives": 0,
   "false_positive_rate": 0.0,
-  "example": "closest=none containment=0.000 matched=0.0 beats status=ok",
-  "example_containment": 0.0,
+  "whole_bank_negatives": {
+    "n": 592,
+    "min": 0.0,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.0,
+    "p75": 0.009433962264150943,
+    "p90": 0.019138755980861243,
+    "max": 0.064,
+    "mean": 0.00571963826226772,
+    "p99": 0.041379310344827586
+  },
+  "whole_bank_false_positives": 0,
+  "whole_bank_false_positive_rate": 0.0,
+  "likely_related": [
+    {
+      "containment": 0.356,
+      "query": "suno-0648.abc",
+      "closest": "suno-0381.abc",
+      "vocal_cluster": "C042"
+    },
+    {
+      "containment": 0.355,
+      "query": "suno-0381.abc",
+      "closest": "suno-0648.abc",
+      "vocal_cluster": "C042"
+    },
+    {
+      "containment": 0.224,
+      "query": "suno-0105.abc",
+      "closest": "suno-0167.abc",
+      "vocal_cluster": "C020"
+    },
+    {
+      "containment": 0.199,
+      "query": "suno-0167.abc",
+      "closest": "suno-0105.abc",
+      "vocal_cluster": "C020"
+    }
+  ],
+  "example": "not run",
+  "example_containment": null,
   "positive_misses": [
     {
-      "containment": 0.015,
+      "containment": 0.0,
       "cluster": "C029",
       "member": "suno-0098.abc",
       "representative": "suno-0120.abc"
+    },
+    {
+      "containment": 0.05,
+      "cluster": "C027",
+      "member": "suno-0089.abc",
+      "representative": "suno-0108.abc"
     }
   ]
 }
