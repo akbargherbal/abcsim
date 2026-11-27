@@ -6,22 +6,42 @@ Example: Repo B's assets/example_song.abc.
 
 Writes docs/novelty_calibration.md and out/novelty_calibration.json.
 
+Variants mode (--variants A.bin,B.bin,...) evaluates several fingerprint files
+(full set and bottom-k sketches) with the SAME estimator novelty_check.py uses
+at runtime, recomputes a threshold per variant and writes
+docs/fingerprint_options.md plus out/fingerprint_variants.json.  --stamp then
+records each variant's recommended threshold in its file header.
+
+The Repo B example song is located through repo_b.find_repo_b (environment
+variable ABC_SCORE_COMPOSER, then a sibling folder, then ~/abc_score_composer);
+pass --example to point at a specific file.
+
 Usage:
     python abcsim/calibrate_novelty.py CORPUS_ROOT out [--example PATH]
+    python abcsim/calibrate_novelty.py CORPUS_ROOT out --variants \
+        handoff/skill_0.2.3/assets/corpus_fingerprints.bin,handoff/skill_0.2.3/assets/alt/corpus_fingerprints.k128.bin --stamp
 """
 import argparse
+import importlib.util
 import json
 import random
 import statistics
 import struct
 import sys
+import time
 from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from corpus import load_all
 from features import song_stream
-from export_fingerprints import hashes_for_tokens, hash_ngram, N
+from export_fingerprints import hashes_for_tokens, hash_ngram, N, restamp
+import repo_b
+
+ROOT = Path(__file__).resolve().parents[1]
+NOVELTY_CHECK = ROOT / 'handoff' / 'skill_0.2.3' / 'scripts' / 'novelty_check.py'
+RELATED_FLOOR = 0.15   # whole-bank best matches at or above this are listed as likely related pairs
+GRID = [0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10, 0.12, 0.15, 0.20, 0.25, 0.30]
 
 MAGIC = b'ABCFP1\n'
 
@@ -71,16 +91,355 @@ def pct(vals, p):
     return vals[min(len(vals) - 1, int(p / 100.0 * len(vals)))]
 
 
+
+# --------------------------------------------------------------------------- variants mode
+def load_novelty_module():
+    """Import the handoff novelty_check.py so calibration uses the runtime estimator."""
+    rb = repo_b.find_repo_b()
+    if rb is not None:
+        sys.path.insert(0, str(rb / 'scripts'))      # lets nc.check() parse songs
+    spec = importlib.util.spec_from_file_location('novelty_check_handoff', NOVELTY_CHECK)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod, rb
+
+
+def entry_score(nc, prep, entry):
+    """Containment of a composition (prepared grams) in ONE bank entry (id, set, tau)."""
+    _sid, hs, tau = entry
+    matched, den = nc.match_song(prep, hs, tau)
+    if den <= 0 or not matched:
+        return 0.0
+    if tau is not None and len(matched) < nc.MIN_SKETCH_MATCHES:
+        return 0.0
+    return len(matched) / float(den)
+
+
+def known_related_pairs(outd):
+    """Pairs abcsim's own similarity search ranked as related (out/top_pairs.csv,
+    plus the listening/rescue pair lists).  They share real material, so a high
+    containment between them is a true hit and must not count as a false positive."""
+    import csv
+    pairs = set()
+    f = Path(outd) / 'top_pairs.csv'
+    if f.exists():
+        with open(f, encoding='utf-8') as fh:
+            for r in csv.DictReader(fh):
+                a, b = r.get('id_A'), r.get('id_B')
+                if a and b:
+                    pairs.add(frozenset((a, b)))
+    for name in ('listen_pairs.tsv', 'rescue_pairs.tsv'):
+        f = Path(outd) / name
+        if f.exists():
+            for line in f.read_text(encoding='utf-8').splitlines():
+                cols = line.split('\t')
+                if len(cols) >= 2:
+                    pairs.add(frozenset((cols[0], cols[1])))
+    return pairs
+
+
+def choose_threshold(neg_bank_max, pair_max):
+    """Smallest grid value with a 1.25x margin over the worst unrelated score."""
+    floor = 1.25 * max(neg_bank_max, pair_max)
+    for t in GRID:
+        if t >= floor - 1e-12:
+            return t, True
+    return GRID[-1], False
+
+
+def run_variants(args, example_path):
+    nc, rb = load_novelty_module()
+    outd = Path(args.outd)
+    clusters = json.loads((outd / 'clusters.json').read_text(encoding='utf-8'))
+    keep = [x.strip() for x in (outd / 'dedupe_keep.txt').read_text(encoding='utf-8').splitlines() if x.strip()]
+    cluster_of = {}
+    for c in clusters['clusters']:
+        for m in c['members']:
+            cluster_of[m['id']] = c['id']
+    for sid in clusters['singletons']:
+        cluster_of[sid] = 'S:' + sid
+    songs = {s['id']: s for s in load_all(args.corpus)}
+    related = known_related_pairs(outd)
+
+    gcache = {}
+    raw = {}
+
+    def grams(sid):
+        """Prepared n-grams ({hash: [positions]}) of a kept song; {} when too short."""
+        if sid not in gcache:
+            st = song_stream(songs[sid]['abc'], voice='Vocal') if sid in songs else None
+            raw[sid] = grams_with_starts(st) if st is not None else []
+            gcache[sid] = nc.prepare(raw[sid])
+        return gcache[sid]
+
+    # example song grams (abcsim tokenizer, same as the single-bank path)
+    ex_grams = None
+    if example_path:
+        from parse import parse_abc
+        from features import tokens_from_notes
+        song = parse_abc(Path(example_path).read_text(encoding='utf-8'))
+        notes = song.voices.get('Vocal') or (song.voices[max(song.voices, key=lambda v: len(song.voices[v]))] if song.voices else [])
+        tk = tokens_from_notes(notes) if notes else None
+        if tk is not None:
+            ex_grams = nc.prepare(grams_with_starts(dict(iv=tk[0], rc=tk[1])))
+
+    rng = random.Random(0)
+    neg_pairs = []
+    for _ in range(args.samples):
+        a, b = rng.sample(keep, 2)
+        if cluster_of.get(a) != cluster_of.get(b):
+            neg_pairs.append((a, b))
+    queries = rng.sample(keep, min(args.bank_queries, len(keep)))
+
+    # Partial-copy trials, identical for every variant: an unrelated song A with a
+    # contiguous block of L n-grams of bank song B spliced in.  Detected when the
+    # composition's containment in B reaches the variant's threshold.
+    PARTIAL_LENGTHS = (20, 40, 80, 160)
+    rng2 = random.Random(1)
+    partial_trials = {}
+    for L in PARTIAL_LENGTHS:
+        trials = []
+        pool_b = [sid for sid in keep if len(grams(sid)) and len(raw[sid]) >= L + 1]
+        while len(trials) < args.partial_trials and pool_b:
+            b = rng2.choice(pool_b)
+            a = rng2.choice(keep)
+            if (a == b or cluster_of.get(a) == cluster_of.get(b) or not grams(a)
+                    or frozenset((a, b)) in related):
+                continue
+            off = rng2.randrange(0, len(raw[b]) - L + 1)
+            block = [h for h, _ in raw[b][off:off + L]]
+            comp = {h: list(v) for h, v in grams(a).items()}
+            for h in block:
+                comp.setdefault(h, []).append(0)
+            trials.append((a, b, comp))
+        partial_trials[L] = trials
+
+    results = []
+    for path in [x.strip() for x in args.variants.split(',') if x.strip()]:
+        header, bank_songs = nc.load_bank(path)
+        entry = {e[0]: e for e in bank_songs}
+        label = 'full set' if not header.get('sketch') else 'bottom-%d' % header.get('k', 0)
+
+        pos_rows = []
+        for c in clusters['clusters']:
+            rep = c['representative']
+            if rep not in entry:
+                continue
+            for m in c['members']:
+                if m['id'] == rep:
+                    continue
+                g = grams(m['id'])
+                if not g:
+                    continue
+                pos_rows.append((entry_score(nc, g, entry[rep]), c['id'], m['id'], rep))
+        pos = [r[0] for r in pos_rows]
+
+        neg_pair = []
+        for a, b in neg_pairs:
+            if b in entry and grams(a):
+                neg_pair.append(entry_score(nc, grams(a), entry[b]))
+
+        neg_bank = []
+        for q in queries:
+            g = grams(q)
+            if not g:
+                continue
+            others = [e for e in bank_songs if cluster_of.get(e[0]) != cluster_of.get(q)
+                      and frozenset((e[0], q)) not in related]
+            best = nc.best_match(g, others)
+            neg_bank.append((best[0] if best else 0.0, q, best[2] if best else None))
+        likely_related = [(v, q, b) for v, q, b in neg_bank if v >= RELATED_FLOOR]
+        neg_bank = [v for v, _q, _b in neg_bank if v < RELATED_FLOOR]
+
+        pair_max = max(neg_pair) if neg_pair else 0.0
+        bank_max = max(neg_bank) if neg_bank else 0.0
+        rec, margin_ok = choose_threshold(bank_max, pair_max)
+
+        partial = {}
+        for L, trials in partial_trials.items():
+            hits = sum(1 for _a, b, comp in trials if b in entry and entry_score(nc, comp, entry[b]) >= rec)
+            partial[L] = hits / float(len(trials)) if trials else None
+
+        def caught(t):
+            return sum(1 for v in pos if v >= t)
+
+        def fp(vals, t):
+            return sum(1 for v in vals if v >= t)
+
+        ex = None
+        ex_time = None
+        if ex_grams:
+            b = nc.best_match(ex_grams, bank_songs)
+            ex = b[0] if b else 0.0
+        if example_path and rb is not None and nc.parse_abc is not None:
+            t0 = time.perf_counter()
+            nc.check(example_path, path)
+            ex_time = time.perf_counter() - t0
+
+        results.append(dict(
+            file=str(path), label=label, bytes=Path(path).stat().st_size,
+            songs=len(bank_songs), hashes=header['total'], sketch=bool(header.get('sketch')),
+            k=header.get('k', 0),
+            positives=len(pos), caught_at_005=caught(0.05), caught_at_rec=caught(rec),
+            recommended_threshold=rec, margin_ok=margin_ok,
+            pos_p10=pct(pos, 10), pos_p50=pct(pos, 50), pos_min=min(pos) if pos else None,
+            neg_pairs=len(neg_pair), neg_pair_max=pair_max, neg_pair_fp_005=fp(neg_pair, 0.05),
+            neg_pair_fp_rec=fp(neg_pair, rec),
+            neg_bank_queries=len(neg_bank), neg_bank_max=bank_max,
+            likely_related=[dict(containment=round(v, 3), query=q, closest=b) for v, q, b in sorted(likely_related, reverse=True)],
+            neg_bank_p99=pct(neg_bank, 99), neg_bank_mean=(sum(neg_bank) / len(neg_bank)) if neg_bank else 0.0,
+            neg_bank_fp_005=fp(neg_bank, 0.05), neg_bank_fp_rec=fp(neg_bank, rec),
+            example=ex, example_seconds=ex_time, partial_detect={str(k): v for k, v in partial.items()},
+            partial_trials=args.partial_trials,
+            positive_misses_at_rec=[dict(containment=round(v, 3), cluster=c, member=m, representative=r)
+                                    for v, c, m, r in sorted(pos_rows) if v < rec],
+        ))
+        print('   partial-copy detection @rec: ' + ', '.join('L=%d %.0f%%' % (k, 100 * v) for k, v in partial.items() if v is not None))
+        print('%-10s %8d B  pos %d/%d @0.05, %d/%d @%.2f | pair max %.4f | bank max %.4f | example %s' % (
+            label, results[-1]['bytes'], caught(0.05), len(pos), caught(rec), len(pos), rec,
+            pair_max, bank_max, '%.3f' % ex if ex is not None else 'n/a'))
+
+    # --- pick a recommendation by a stated rule
+    full = next((r for r in results if not r['sketch']), results[0])
+    ok = [r for r in results if r['margin_ok'] and r['neg_pair_fp_rec'] == 0 and r['neg_bank_fp_rec'] == 0
+          and r['caught_at_rec'] >= full['caught_at_rec'] - 2
+          and (r['partial_detect'].get('80') or 0) >= 0.90]
+    pick = min(ok, key=lambda r: r['bytes']) if ok else full
+    json_path = Path(args.outd) / 'fingerprint_variants.json'
+    json_path.write_text(json.dumps(dict(variants=results, recommended=pick['file']), indent=2) + '\n',
+                         encoding='utf-8', newline='\n')
+
+    if args.stamp:
+        for r in results:
+            restamp(r['file'], threshold=r['recommended_threshold'])
+            r['bytes'] = Path(r['file']).stat().st_size
+        print('stamped thresholds into %d file headers' % len(results))
+
+    prev = None
+    prev_path = Path(args.outd) / 'novelty_calibration.json'
+    if prev_path.exists():
+        prev = json.loads(prev_path.read_text(encoding='utf-8'))
+
+    L = ['# Fingerprint variants', '',
+         'Generated by `abcsim/calibrate_novelty.py --variants`. Every variant is scored with the',
+         'same estimator `novelty_check.py` uses at runtime (it is imported, not re-implemented).', '',
+         '## Variants', '',
+         'A bottom-k sketch keeps the k numerically smallest 8-gram hashes of each song. A song with',
+         'fewer than k hashes is stored complete. Because a sketch only knows hashes up to its largest',
+         'stored value (tau), containment is estimated over the composition n-grams whose hash is <= tau,',
+         'and a sketch hit also needs at least %d matching n-grams.' % nc.MIN_SKETCH_MATCHES, '',
+         '| variant | file size | hashes | positives caught @0.05 | recommended threshold | positives caught @rec | '
+         'unrelated pairs: max / FP@rec | whole-bank unrelated best: max / p99 | Repo B example |',
+         '|---|---|---|---|---|---|---|---|---|']
+    for r in results:
+        L.append('| %s | %.0f KB | %d | %d / %d | **%.2f** | %d / %d | %.4f / %d | %.4f / %.4f | %s |' % (
+            r['label'], r['bytes'] / 1024.0, r['hashes'], r['caught_at_005'], r['positives'],
+            r['recommended_threshold'], r['caught_at_rec'], r['positives'],
+            r['neg_pair_max'], r['neg_pair_fp_rec'], r['neg_bank_max'], r['neg_bank_p99'] or 0.0,
+            ('%.3f' % r['example']) if r['example'] is not None else 'not scored'))
+    L += ['', '### Partial-copy sensitivity', '',
+          'Detection rate at each variant\'s recommended threshold when a block of L consecutive n-grams of a bank',
+          'song is spliced into an unrelated song (%d trials per L, same trials for every variant). One n-gram is about' % results[0]['partial_trials'],
+          '0.25 s of melody, so L=20 is a short hook and L=80 is a passage of roughly 20 s.', '',
+          '| variant | threshold | L=20 | L=40 | L=80 | L=160 |', '|---|---|---|---|---|---|']
+    for r in results:
+        L.append('| %s | %.2f | %s |' % (r['label'], r['recommended_threshold'], ' | '.join(
+            ('%.0f%%' % (100 * r['partial_detect'][str(l)])) if r['partial_detect'].get(str(l)) is not None else '—'
+            for l in (20, 40, 80, 160))))
+    L += ['',
+          'Columns:', '',
+          '- *positives*: %d within-cluster pairs (member scored against its cluster representative).' % results[0]['positives'],
+          '- *unrelated pairs*: %d random different-cluster pairs, containment of A in B.' % results[0]['neg_pairs'],
+          '- *whole-bank unrelated best*: for %d random songs, the best containment over every bank song' % results[0]['neg_bank_queries'],
+          '  outside their own cluster. This is what the runtime check actually reports for an original song,',
+          '  so it is the number the threshold must clear.', '',
+          '## Threshold rule', '',
+          'The recommended threshold is the smallest value on the grid %s that is at least 1.25x the larger' % ', '.join('%.2f' % g for g in GRID),
+          'of the unrelated-pair maximum and the whole-bank unrelated maximum (excluding likely related pairs). It is recomputed per variant;',
+          '0.05 is not reused unless it satisfies this rule.', '']
+    flag = [r for r in results if not r['margin_ok']]
+    if flag:
+        L.append('WARNING: no grid threshold clears the 1.25x margin for: %s.' % ', '.join(r['label'] for r in flag))
+        L.append('')
+    L += ['## Recommendation', '']
+    L.append('Rule: the smallest file whose recommended threshold has zero false positives on both unrelated sets, '
+             'catches at least (full-set caught - 2) positives, and detects at least 90% of spliced 80-n-gram '
+             'passages (about 20 seconds of melody).')
+    L.append('')
+    L.append('**Recommended variant: %s (%.0f KB, threshold %.2f).** It catches %d of %d positives (full set: %d of %d) '
+             'and the worst unrelated whole-bank score is %.4f.' % (
+                 pick['label'], pick['bytes'] / 1024.0, pick['recommended_threshold'], pick['caught_at_rec'],
+                 pick['positives'], full['caught_at_rec'], full['positives'], pick['neg_bank_max']))
+    L.append('')
+    L.append('Repo B keeps the choice: the full set is the most faithful, the sketches trade some recall and')
+    L.append('precision on short songs for a much smaller package.')
+    L.append('')
+    L += ['## Missed positives (cluster pairs below the recommended threshold)', '']
+    for r in results:
+        misses = r['positive_misses_at_rec']
+        L.append('- **%s**: %d miss(es)%s' % (r['label'], len(misses), (' - ' + ', '.join(
+            '%s vs %s (%.3f)' % (m['member'], m['representative'], m['containment']) for m in misses[:6])) if misses else ''))
+    L += ['', '## Timing', '']
+    for r in results:
+        L.append('- %s: %s' % (r['label'], ('%.2f s for check() on the Repo B example' % r['example_seconds'])
+                               if r['example_seconds'] is not None else 'not measured (Repo B not found)'))
+    L += ['', '## Previous (0.2.3 handoff) numbers, kept for comparison', '']
+    if prev:
+        L.append('Full set, set-based containment, 0.05 threshold (from `out/novelty_calibration.json` before this revision): '
+                 '%d / %d positives at or above 0.05, %d false positives on %d unrelated pairs, maximum unrelated '
+                 'containment %.4f.' % (prev['positives_at_or_above'], prev['positives']['n'], prev['false_positives'],
+                                         prev['negatives']['n'], prev['negatives']['max']))
+        L.append('')
+        L.append('The full-set row above uses the position-based estimator the runtime script uses, so its positive '
+                 'counts can differ slightly from the set-based numbers.')
+    else:
+        L.append('No earlier calibration file was found.')
+    L += ['', '## Limitations', '',
+          '- Sketch estimates are noisier for short songs; the %d-hit minimum protects against single coincidences but can miss a short copy.' % nc.MIN_SKETCH_MATCHES,
+          '- `matched=` beats in the runtime line is computed from matched n-grams only, so for a sketch it is a lower bound.',
+          '- The check is advisory, not a plagiarism verdict.', '']
+    doc = Path(args.variants_doc)
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text('\n'.join(L), encoding='utf-8', newline='\n')
+    print('recommended variant:', pick['label'])
+    print('wrote %s and %s' % (doc, json_path))
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('corpus')
     ap.add_argument('outd', nargs='?', default='out')
     ap.add_argument('--bank', default='handoff/skill_0.2.3/assets/corpus_fingerprints.bin')
-    ap.add_argument('--example', default='/tmp/opencode/abc_score_composer/assets/example_song.abc')
+    ap.add_argument('--example', default=None,
+                    help="Repo B example song (default: <Repo B>/assets/example_song.abc, found via ABC_SCORE_COMPOSER, a sibling folder or ~)")
+    ap.add_argument('--variants', default=None, help='comma-separated fingerprint files to compare (variants mode)')
+    ap.add_argument('--variants-doc', default='docs/fingerprint_options.md')
+    ap.add_argument('--stamp', action='store_true', help='write each variant\'s recommended threshold into its header')
+    ap.add_argument('--bank-queries', type=int, default=10000, help='songs queried against the whole bank in variants mode (default: every kept song)')
+    ap.add_argument('--partial-trials', type=int, default=100, help='partial-copy trials per block length in variants mode')
     ap.add_argument('--threshold', type=float, default=0.05)
     ap.add_argument('--samples', type=int, default=3000)
     ap.add_argument('--doc', default='docs/novelty_calibration.md')
     args = ap.parse_args(argv)
+
+    example_path = None
+    if args.example:
+        example_path = Path(args.example)
+        if not example_path.exists():
+            print('--example file not found: %s' % example_path)
+            return 2
+    else:
+        rb = repo_b.find_repo_b()
+        if rb is not None and (rb / 'assets' / 'example_song.abc').exists():
+            example_path = rb / 'assets' / 'example_song.abc'
+        else:
+            print('NOTE: ' + repo_b.not_found_message())
+            print('NOTE: the Repo B example song will not be scored.')
+    args.example = str(example_path) if example_path else None
+
+    if args.variants:
+        return run_variants(args, example_path)
 
     outd = Path(args.outd)
     clusters = json.loads((outd / 'clusters.json').read_text(encoding='utf-8'))
@@ -95,6 +454,9 @@ def main(argv=None):
 
     songs = {s['id']: s for s in load_all(args.corpus)}
     header, bank = load_bank(args.bank)
+    if header.get('sketch'):
+        print('The single-bank report needs a full-set bank; use --variants for sketches.')
+        return 2
 
     cache = {}
 
@@ -156,23 +518,18 @@ def main(argv=None):
         if st is None:
             example_line = 'too short to fingerprint'
         else:
-            grams = grams_with_starts(st)
-            best = None
-            for sid, hs in bank.items():
-                starts = [i for h, i in grams if h in hs]
-                if not starts:
-                    continue
-                cont = len(starts) / float(len(grams))
-                mb = matched_beats(notes, starts)
-                if best is None or (cont, mb) > best[:2]:
-                    best = (cont, mb, sid)
+            nc, _rb = load_novelty_module()
+            prep = nc.prepare(grams_with_starts(st))
+            best = nc.best_match(prep, [(sid, hs, None) for sid, hs in bank.items()],
+                                 tiebreak=lambda m: matched_beats(notes, [i for h in m for i in prep[h]]))
             if best is None:
                 example_containment = 0.0
                 example_line = 'closest=none containment=0.000 matched=0.0 beats status=ok'
             else:
+                mb = matched_beats(notes, [i for h in best[1] for i in prep[h]])
                 example_containment = best[0]
                 example_line = 'closest=%s containment=%.3f matched=%.1f beats status=%s' % (
-                    best[2], best[0], best[1], 'close' if best[0] >= args.threshold else 'ok')
+                    best[2], best[0], mb, 'close' if best[0] >= args.threshold else 'ok')
 
     fp = sum(1 for x in negatives if x >= args.threshold)
     fp_rate = fp / float(len(negatives)) if negatives else 0.0

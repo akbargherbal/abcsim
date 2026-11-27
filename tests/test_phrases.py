@@ -4,7 +4,6 @@ Skips if a local abc_score_composer checkout is not available.  The corpus zip
 is in this repository, so the source-note check does not need external data.
 """
 import json
-import os
 import re
 import sys
 import zipfile
@@ -20,16 +19,8 @@ DEGREE_RE = re.compile(r'^[#b]*[1-7][+\-]*$')
 
 
 def find_repo_b():
-    candidates = [
-        os.environ.get('ABC_SCORE_COMPOSER'),
-        ROOT.parent / 'abc_score_composer',
-        Path('/tmp/opencode/abc_score_composer'),
-        Path.home() / 'abc_score_composer',
-    ]
-    for c in candidates:
-        if c and (Path(c) / 'scripts' / 'abc_common.py').exists():
-            return Path(c)
-    return None
+    import repo_b
+    return repo_b.find_repo_b()
 
 
 def load_bank():
@@ -103,3 +94,48 @@ def test_source_notes_exist_in_corpus():
             if not found:
                 missing += 1
     assert missing == 0
+
+
+def test_every_phrase_has_byte_metadata():
+    bank = load_bank()
+    for p in bank['phrases']:
+        assert p['phrase_bytes'] == len(p['phrase'].encode('utf-8')), p['id']
+        assert p['fits_seed_budget'] == (p['phrase_bytes'] <= 130), p['id']
+
+
+def test_bank_respects_the_byte_limit_it_was_built_with():
+    bank = load_bank()
+    limit = bank['generated_from']['selection']['max_phrase_bytes']
+    if limit:
+        assert all(p['phrase_bytes'] <= limit for p in bank['phrases'])
+        assert all(p['fits_seed_budget'] for p in bank['phrases']) or limit > 130
+
+
+def test_mode_quota_is_met_or_shortfall_is_explicit():
+    bank = load_bank()
+    counts = bank['counts']
+    assert 'mode_shortfall' in counts
+    sel = bank['generated_from']['selection']
+    n = sel['min_per_mode']
+    for mode in sel['modes']:
+        short = counts['mode_shortfall'].get(mode)
+        have = counts['by_mode_hint'].get(mode, 0)
+        wanted = 2 * n            # n per cadence class
+        if short is None:
+            assert have >= wanted, (mode, have, wanted)
+        else:
+            assert short['got'] < short['wanted'], mode
+            assert have >= short['got'], mode
+            # a shortfall is never padded with other labels: the quota total is wanted - missing
+            assert have >= wanted - (short['wanted'] - short['got']), mode
+
+
+TOKEN_RE = re.compile(r'^(r|[#b]*[1-7][+\-]*):[0-9]*\.?[0-9]+~?$')
+
+
+def test_phrase_text_is_pure_degree_grammar_with_no_key():
+    """Degrees are tonic-relative: the text carries no key or transposition."""
+    bank = load_bank()
+    for p in bank['phrases']:
+        for tok in p['phrase'].split():
+            assert TOKEN_RE.match(tok), (p['id'], tok)

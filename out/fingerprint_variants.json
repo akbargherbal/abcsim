@@ -1,0 +1,389 @@
+{
+  "variants": [
+    {
+      "file": "handoff/skill_0.2.3/assets/corpus_fingerprints.bin",
+      "label": "bottom-256",
+      "bytes": 630365,
+      "songs": 596,
+      "hashes": 150037,
+      "sketch": true,
+      "k": 256,
+      "positives": 47,
+      "caught_at_005": 45,
+      "caught_at_rec": 45,
+      "recommended_threshold": 0.08,
+      "margin_ok": true,
+      "pos_p10": 0.19090909090909092,
+      "pos_p50": 0.46825396825396826,
+      "pos_min": 0.0,
+      "neg_pairs": 2968,
+      "neg_pair_max": 0.019933554817275746,
+      "neg_pair_fp_005": 0,
+      "neg_pair_fp_rec": 0,
+      "neg_bank_queries": 592,
+      "neg_bank_max": 0.064,
+      "likely_related": [
+        {
+          "containment": 0.356,
+          "query": "suno-0648.abc",
+          "closest": "suno-0381.abc"
+        },
+        {
+          "containment": 0.355,
+          "query": "suno-0381.abc",
+          "closest": "suno-0648.abc"
+        },
+        {
+          "containment": 0.224,
+          "query": "suno-0105.abc",
+          "closest": "suno-0167.abc"
+        },
+        {
+          "containment": 0.199,
+          "query": "suno-0167.abc",
+          "closest": "suno-0105.abc"
+        }
+      ],
+      "neg_bank_p99": 0.041379310344827586,
+      "neg_bank_mean": 0.00571963826226772,
+      "neg_bank_fp_005": 2,
+      "neg_bank_fp_rec": 0,
+      "example": null,
+      "example_seconds": null,
+      "partial_detect": {
+        "20": 0.06,
+        "40": 0.68,
+        "80": 0.98,
+        "160": 1.0
+      },
+      "partial_trials": 100,
+      "positive_misses_at_rec": [
+        {
+          "containment": 0.0,
+          "cluster": "C029",
+          "member": "suno-0098.abc",
+          "representative": "suno-0120.abc"
+        },
+        {
+          "containment": 0.05,
+          "cluster": "C027",
+          "member": "suno-0089.abc",
+          "representative": "suno-0108.abc"
+        }
+      ]
+    },
+    {
+      "file": "handoff/skill_0.2.3/assets/alt/corpus_fingerprints.full.bin",
+      "label": "full set",
+      "bytes": 1027894,
+      "songs": 596,
+      "hashes": 249371,
+      "sketch": false,
+      "k": 0,
+      "positives": 47,
+      "caught_at_005": 46,
+      "caught_at_rec": 45,
+      "recommended_threshold": 0.08,
+      "margin_ok": true,
+      "pos_p10": 0.17866666666666667,
+      "pos_p50": 0.46292585170340683,
+      "pos_min": 0.015313935681470138,
+      "neg_pairs": 2968,
+      "neg_pair_max": 0.0165016501650165,
+      "neg_pair_fp_005": 0,
+      "neg_pair_fp_rec": 0,
+      "neg_bank_queries": 592,
+      "neg_bank_max": 0.05536332179930796,
+      "likely_related": [
+        {
+          "containment": 0.356,
+          "query": "suno-0648.abc",
+          "closest": "suno-0381.abc"
+        },
+        {
+          "containment": 0.355,
+          "query": "suno-0381.abc",
+          "closest": "suno-0648.abc"
+        },
+        {
+          "containment": 0.218,
+          "query": "suno-0105.abc",
+          "closest": "suno-0167.abc"
+        },
+        {
+          "containment": 0.193,
+          "query": "suno-0167.abc",
+          "closest": "suno-0105.abc"
+        }
+      ],
+      "neg_bank_p99": 0.034782608695652174,
+      "neg_bank_mean": 0.0074861847084278805,
+      "neg_bank_fp_005": 1,
+      "neg_bank_fp_rec": 0,
+      "example": null,
+      "example_seconds": null,
+      "partial_detect": {
+        "20": 0.06,
+        "40": 0.64,
+        "80": 1.0,
+        "160": 1.0
+      },
+      "partial_trials": 100,
+      "positive_misses_at_rec": [
+        {
+          "containment": 0.015,
+          "cluster": "C029",
+          "member": "suno-0098.abc",
+          "representative": "suno-0120.abc"
+        },
+        {
+          "containment": 0.053,
+          "cluster": "C027",
+          "member": "suno-0089.abc",
+          "representative": "suno-0108.abc"
+        }
+      ]
+    },
+    {
+      "file": "out/fp_variants/corpus_fingerprints.k512.bin",
+      "label": "bottom-512",
+      "bytes": 984482,
+      "songs": 596,
+      "hashes": 238522,
+      "sketch": true,
+      "k": 512,
+      "positives": 47,
+      "caught_at_005": 46,
+      "caught_at_rec": 45,
+      "recommended_threshold": 0.08,
+      "margin_ok": true,
+      "pos_p10": 0.17866666666666667,
+      "pos_p50": 0.46292585170340683,
+      "pos_min": 0.014285714285714285,
+      "neg_pairs": 2968,
+      "neg_pair_max": 0.015402843601895734,
+      "neg_pair_fp_005": 0,
+      "neg_pair_fp_rec": 0,
+      "neg_bank_queries": 592,
+      "neg_bank_max": 0.052941176470588235,
+      "likely_related": [
+        {
+          "containment": 0.356,
+          "query": "suno-0648.abc",
+          "closest": "suno-0381.abc"
+        },
+        {
+          "containment": 0.355,
+          "query": "suno-0381.abc",
+          "closest": "suno-0648.abc"
+        },
+        {
+          "containment": 0.222,
+          "query": "suno-0105.abc",
+          "closest": "suno-0167.abc"
+        },
+        {
+          "containment": 0.193,
+          "query": "suno-0167.abc",
+          "closest": "suno-0105.abc"
+        }
+      ],
+      "neg_bank_p99": 0.03582089552238806,
+      "neg_bank_mean": 0.007417973672481035,
+      "neg_bank_fp_005": 1,
+      "neg_bank_fp_rec": 0,
+      "example": null,
+      "example_seconds": null,
+      "partial_detect": {
+        "20": 0.07,
+        "40": 0.64,
+        "80": 1.0,
+        "160": 1.0
+      },
+      "partial_trials": 100,
+      "positive_misses_at_rec": [
+        {
+          "containment": 0.014,
+          "cluster": "C029",
+          "member": "suno-0098.abc",
+          "representative": "suno-0120.abc"
+        },
+        {
+          "containment": 0.053,
+          "cluster": "C027",
+          "member": "suno-0089.abc",
+          "representative": "suno-0108.abc"
+        }
+      ]
+    },
+    {
+      "file": "handoff/skill_0.2.3/assets/alt/corpus_fingerprints.k128.bin",
+      "label": "bottom-128",
+      "bytes": 334795,
+      "songs": 596,
+      "hashes": 76205,
+      "sketch": true,
+      "k": 128,
+      "positives": 47,
+      "caught_at_005": 45,
+      "caught_at_rec": 43,
+      "recommended_threshold": 0.15,
+      "margin_ok": true,
+      "pos_p10": 0.1810344827586207,
+      "pos_p50": 0.44881889763779526,
+      "pos_min": 0.0,
+      "neg_pairs": 2968,
+      "neg_pair_max": 0.02304147465437788,
+      "neg_pair_fp_005": 0,
+      "neg_pair_fp_rec": 0,
+      "neg_bank_queries": 592,
+      "neg_bank_max": 0.10144927536231885,
+      "likely_related": [
+        {
+          "containment": 0.349,
+          "query": "suno-0381.abc",
+          "closest": "suno-0648.abc"
+        },
+        {
+          "containment": 0.346,
+          "query": "suno-0648.abc",
+          "closest": "suno-0381.abc"
+        },
+        {
+          "containment": 0.261,
+          "query": "suno-0105.abc",
+          "closest": "suno-0167.abc"
+        },
+        {
+          "containment": 0.219,
+          "query": "suno-0167.abc",
+          "closest": "suno-0105.abc"
+        }
+      ],
+      "neg_bank_p99": 0.047058823529411764,
+      "neg_bank_mean": 0.003358118159115896,
+      "neg_bank_fp_005": 3,
+      "neg_bank_fp_rec": 0,
+      "example": null,
+      "example_seconds": null,
+      "partial_detect": {
+        "20": 0.01,
+        "40": 0.12,
+        "80": 0.52,
+        "160": 0.98
+      },
+      "partial_trials": 100,
+      "positive_misses_at_rec": [
+        {
+          "containment": 0.0,
+          "cluster": "C029",
+          "member": "suno-0098.abc",
+          "representative": "suno-0120.abc"
+        },
+        {
+          "containment": 0.05,
+          "cluster": "C027",
+          "member": "suno-0089.abc",
+          "representative": "suno-0108.abc"
+        },
+        {
+          "containment": 0.144,
+          "cluster": "C030",
+          "member": "suno-0123.abc",
+          "representative": "suno-0099.abc"
+        },
+        {
+          "containment": 0.147,
+          "cluster": "C032",
+          "member": "suno-0122.abc",
+          "representative": "suno-0106.abc"
+        }
+      ]
+    },
+    {
+      "file": "handoff/skill_0.2.3/assets/alt/corpus_fingerprints.k64.bin",
+      "label": "bottom-64",
+      "bytes": 181800,
+      "songs": 596,
+      "hashes": 38127,
+      "sketch": true,
+      "k": 64,
+      "positives": 47,
+      "caught_at_005": 46,
+      "caught_at_rec": 43,
+      "recommended_threshold": 0.15,
+      "margin_ok": true,
+      "pos_p10": 0.15,
+      "pos_p50": 0.4528301886792453,
+      "pos_min": 0.0,
+      "neg_pairs": 2968,
+      "neg_pair_max": 0.0,
+      "neg_pair_fp_005": 0,
+      "neg_pair_fp_rec": 0,
+      "neg_bank_queries": 592,
+      "neg_bank_max": 0.10344827586206896,
+      "likely_related": [
+        {
+          "containment": 0.404,
+          "query": "suno-0648.abc",
+          "closest": "suno-0381.abc"
+        },
+        {
+          "containment": 0.362,
+          "query": "suno-0381.abc",
+          "closest": "suno-0648.abc"
+        },
+        {
+          "containment": 0.286,
+          "query": "suno-0105.abc",
+          "closest": "suno-0167.abc"
+        },
+        {
+          "containment": 0.173,
+          "query": "suno-0167.abc",
+          "closest": "suno-0105.abc"
+        }
+      ],
+      "neg_bank_p99": 0.05263157894736842,
+      "neg_bank_mean": 0.0015116398738616876,
+      "neg_bank_fp_005": 7,
+      "neg_bank_fp_rec": 0,
+      "example": null,
+      "example_seconds": null,
+      "partial_detect": {
+        "20": 0.01,
+        "40": 0.11,
+        "80": 0.51,
+        "160": 0.99
+      },
+      "partial_trials": 100,
+      "positive_misses_at_rec": [
+        {
+          "containment": 0.0,
+          "cluster": "C029",
+          "member": "suno-0098.abc",
+          "representative": "suno-0120.abc"
+        },
+        {
+          "containment": 0.051,
+          "cluster": "C027",
+          "member": "suno-0089.abc",
+          "representative": "suno-0108.abc"
+        },
+        {
+          "containment": 0.091,
+          "cluster": "C030",
+          "member": "suno-0123.abc",
+          "representative": "suno-0099.abc"
+        },
+        {
+          "containment": 0.145,
+          "cluster": "C031",
+          "member": "suno-0103.abc",
+          "representative": "suno-0121.abc"
+        }
+      ]
+    }
+  ],
+  "recommended": "handoff/skill_0.2.3/assets/corpus_fingerprints.bin"
+}

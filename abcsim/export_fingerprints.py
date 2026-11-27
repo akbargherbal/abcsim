@@ -12,8 +12,19 @@ Output: handoff/skill_0.2.3/assets/corpus_fingerprints.bin
 File format: magic b'ABCFP1\\n' + uint32 header length + UTF-8 JSON header +
              little-endian uint32 hashes (per-song slices, sorted unique).
 
+Size control:
+    --budget-bytes N   automatic bottom-k fallback when the full set would exceed N
+                       (default 1 MiB)
+    --sketch-k K       force a bottom-k sketch of K hashes per song, whatever the budget.
+                       A bottom-k sketch keeps the K numerically smallest hashes of a song;
+                       header sketch=true and k=K tell readers (novelty_check.py,
+                       calibrate_novelty.py) to use the sketch estimator.  Songs with fewer
+                       than K hashes are stored complete.
+
 Usage:
     python abcsim/export_fingerprints.py CORPUS_ROOT out
+    python abcsim/export_fingerprints.py CORPUS_ROOT out --sketch-k 128 \
+        --out handoff/skill_0.2.3/assets/alt/corpus_fingerprints.k128.bin
 """
 import argparse
 import json
@@ -56,12 +67,40 @@ def hashes_for_tokens(iv, rc, n=N):
     return sorted(out)
 
 
+def restamp(path, **fields):
+    """Rewrite a fingerprint file's JSON header with extra/updated fields.
+
+    The hash payload is copied untouched (offsets are relative to it), so this
+    is how calibrate_novelty --stamp records a variant's threshold.
+    """
+    path = Path(path)
+    raw = path.read_bytes()
+    assert raw[:len(MAGIC)] == MAGIC, 'not an ABCFP1 file: %s' % path
+    hlen = struct.unpack('<I', raw[len(MAGIC):len(MAGIC) + 4])[0]
+    body = len(MAGIC) + 4
+    header = json.loads(raw[body:body + hlen].decode('utf-8'))
+    payload = raw[body + hlen:]
+    header.update(fields)
+    hb = json.dumps(header, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+    path.write_bytes(MAGIC + struct.pack('<I', len(hb)) + hb + payload)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('corpus', help='folder containing the .abc files')
     ap.add_argument('outd', nargs='?', default='out')
     ap.add_argument('--out', default='handoff/skill_0.2.3/assets/corpus_fingerprints.bin')
+    ap.add_argument('--budget-bytes', type=int, default=SIZE_BUDGET,
+                    help='automatic bottom-k fallback above this size (default %(default)s)')
+    ap.add_argument('--sketch-k', type=int, default=0,
+                    help='force a bottom-k sketch of K hashes per song (0 = off)')
+    ap.add_argument('--threshold', type=float, default=None,
+                    help='stamp an advisory containment threshold into the header '
+                         '(novelty_check.py uses it when --threshold is not given)')
     args = ap.parse_args(argv)
+    if args.sketch_k < 0 or (0 < args.sketch_k < 8):
+        ap.error('--sketch-k must be 0 or at least 8')
+    budget = args.budget_bytes
 
     outd = Path(args.outd)
     keep = [x.strip() for x in (outd / 'dedupe_keep.txt').read_text(encoding='utf-8').splitlines()
@@ -86,18 +125,29 @@ def main(argv=None):
             continue
         per_song.append((sid, hs))
 
-    # bottom-k fallback if the full set would blow the size budget
     total = sum(len(h) for _, h in per_song)
     header_base = dict(format='ABCFP1', n=N, hash=HASH_NAME,
                        tokenizer='features.tokens_from_notes', sketch=False, k=0,
                        songs=[], total=0, skipped_no_vocal=skipped_no_vocal)
-    rough = total * 4 + len(json.dumps(header_base, separators=(',', ':')).encode()) + 64
-    if rough > SIZE_BUDGET:
-        k = max(32, (SIZE_BUDGET - 4096) // max(1, len(per_song)) // 4)
+
+    def est_size(hash_count):
+        # header carries one {id, offset, count} record per song
+        per = sum(len(json.dumps(dict(id=sid, offset=0, count=0), separators=(',', ':')))
+                  for sid, _ in per_song) + 600
+        return hash_count * 4 + per + 64
+
+    k = 0
+    if args.sketch_k:
+        k = args.sketch_k
+        print('forced bottom-%d sketch per song' % k)
+    elif est_size(total) > budget:
+        k = max(32, (budget - est_size(0)) // max(1, len(per_song)) // 4)
+        print('size budget %d B: using bottom-%d sketch per song' % (budget, k))
+    if k:
+        # hs is sorted ascending, so hs[:k] is the bottom-k sketch
         per_song = [(sid, hs[:k]) for sid, hs in per_song]
         header_base['sketch'] = True
         header_base['k'] = k
-        print('size budget: using bottom-%d sketch per song' % k)
 
     songs_meta = []
     offset = 0
@@ -109,6 +159,8 @@ def main(argv=None):
     header = dict(header_base)
     header['songs'] = songs_meta
     header['total'] = len(flat)
+    if args.threshold is not None:
+        header['threshold'] = args.threshold
     header['note'] = ('Advisory fingerprint only; b5 spelling is irrelevant here, '
                       'tokens are interval/rhythm classes.')
     hb = json.dumps(header, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
@@ -126,8 +178,8 @@ def main(argv=None):
         len(per_song), len(flat), len(flat) / max(1, len(per_song)), header['sketch']))
     print('skipped (no Vocal / too short): %d' % skipped_no_vocal)
     print('wrote %s (%.2f MB)' % (out, size / (1024.0 * 1024.0)))
-    if size > SIZE_BUDGET:
-        print('WARNING: still over the 1 MB budget')
+    if size > budget:
+        print('WARNING: still over the %d B budget' % budget)
     return 0
 
 

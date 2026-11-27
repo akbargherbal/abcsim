@@ -12,15 +12,8 @@ HANDOFF = ROOT / 'handoff' / 'skill_0.2.3' / 'scripts' / 'novelty_check.py'
 
 
 def find_repo_b():
-    candidates = [
-        Path('/tmp/opencode/abc_score_composer'),
-        ROOT.parent / 'abc_score_composer',
-        Path.home() / 'abc_score_composer',
-    ]
-    for c in candidates:
-        if (c / 'scripts' / 'abc_common.py').exists():
-            return c
-    return None
+    import repo_b
+    return repo_b.find_repo_b()
 
 
 def load_novelty():

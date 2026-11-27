@@ -9,13 +9,15 @@ interval/rhythm tokens as abcsim.features.tokens_from_notes, hashes 8-token
 n-grams with FNV-1a 32, and compares them with the deduped representative
 bank.
 
+Containment counts each distinct 8-gram of the composition once.
+
 Prints at most one line:
     NOVELTY closest=suno-0123.abc containment=0.42 matched=18.5 beats status=close
 
 Advisory only: this is a CRAFT-style warning, not a plagiarism verdict.
 
 Usage:
-    python novelty_check.py song.abc [--assets ../assets] [--threshold 0.20]
+    python novelty_check.py song.abc [--assets ../assets] [--bank FILE] [--threshold T]
 """
 from __future__ import annotations
 
@@ -30,8 +32,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 try:
     from abc_common import parse_abc, parse_key
-except ImportError as exc:  # pragma: no cover - only when copied alone
-    raise SystemExit('novelty_check.py must sit beside abc_common.py') from exc
+except ImportError:  # pragma: no cover - only when copied alone
+    # The bank readers and the estimator below are pure Python and stay usable
+    # (abcsim's calibration and tests import them); parsing a song needs Repo B.
+    parse_abc = parse_key = None
+
+
+def _need_repo_b():
+    if parse_abc is None:
+        raise SystemExit('novelty_check.py must sit beside abc_common.py')
 
 TOKEN_RE = re.compile(
     r'"(?P<chord>[^"]*)"'
@@ -99,6 +108,7 @@ def normalize_pitch_dialect(text):
     writes an explicit accidental on every note, so Repo B's durations, ties,
     bars and onsets are unchanged but the MIDI pitches match the cache.
     """
+    _need_repo_b()
     sig = {}
     in_body = False
     cur = None
@@ -171,6 +181,7 @@ def normalize_pitch_dialect(text):
 
 
 def parse_for_tokens(text):
+    _need_repo_b()
     return parse_abc(normalize_pitch_dialect(text), is_text=True)
 
 
@@ -201,7 +212,17 @@ def composition_grams(tokens):
 
 
 # --------------------------------------------------------------------------- bank
+DEFAULT_THRESHOLD = 0.05      # full-set bank; sketch banks stamp their own in the header
+MIN_SKETCH_MATCHES = 3        # a sketch hit needs at least this many matching n-grams
+
+
 def load_bank(path):
+    """Return (header, songs); songs = [(id, hash_set, tau)].
+
+    tau is None for a complete song.  For a bottom-k sketch that was actually
+    truncated (stored count == k) tau is the largest stored hash: the sketch is
+    exact for every hash <= tau and knows nothing above it.
+    """
     with open(path, 'rb') as f:
         magic = f.read(len(MAGIC))
         if magic != MAGIC:
@@ -211,11 +232,67 @@ def load_bank(path):
         data = f.read()
     count = header['total']
     flat = list(struct.unpack('<%dI' % count, data)) if count else []
+    sketch_k = header.get('k', 0) if header.get('sketch') else 0
     songs = []
     for s in header['songs']:
         off, cnt = s['offset'], s['count']
-        songs.append((s['id'], set(flat[off:off + cnt])))
+        hs = set(flat[off:off + cnt])
+        tau = max(hs) if (sketch_k and cnt >= sketch_k and hs) else None
+        songs.append((s['id'], hs, tau))
     return header, songs
+
+
+def default_threshold(header):
+    return float(header.get('threshold', DEFAULT_THRESHOLD))
+
+
+def prepare(grams):
+    """grams = [(hash, position)] -> {hash: [positions]} (each distinct n-gram once)."""
+    by_hash = {}
+    for h, i in grams:
+        by_hash.setdefault(h, []).append(i)
+    return by_hash
+
+
+def match_song(prep, hs, tau):
+    """Match a composition against one bank song.
+
+    Containment counts each DISTINCT n-gram once: the share of the
+    composition's distinct 8-grams that also occur in the bank song.  (Counting
+    positions instead lets one repeated riff inflate the score hundreds of
+    times; this matches the definition abcsim calibrated against.)
+
+    For a truncated bottom-k sketch only n-grams whose hash is <= tau are
+    comparable, so the denominator is the distinct n-grams <= tau (the standard
+    bottom-k estimator).  Returns (matched_hashes, denominator).
+    """
+    if tau is None:
+        den = len(prep)
+        return [h for h in prep if h in hs], den
+    inr = [h for h in prep if h <= tau]
+    return [h for h in inr if h in hs], len(inr)
+
+
+def best_match(prep, songs, tiebreak=None):
+    """Return (containment, matched_hashes, song_id) for the closest bank song, or None.
+
+    `tiebreak(matched_hashes)` (optional) ranks songs with equal containment,
+    e.g. by matched beats.
+    """
+    best = None
+    for sid, hs, tau in songs:
+        matched, den = match_song(prep, hs, tau)
+        if not matched or den <= 0:
+            continue
+        if tau is not None and len(matched) < MIN_SKETCH_MATCHES:
+            continue
+        containment = len(matched) / float(den)
+        key = (containment, tiebreak(matched) if tiebreak else 0.0)
+        if best is None or key > best[0]:
+            best = (key, containment, matched, sid)
+    if best is None:
+        return None
+    return best[1], best[2], best[3]
 
 
 def matched_beats(notes, starts):
@@ -239,7 +316,7 @@ def matched_beats(notes, starts):
     return total
 
 
-def check(abc_path, bank_path, threshold=0.20):
+def check(abc_path, bank_path, threshold=None):
     text = Path(abc_path).read_text(encoding='utf-8')
     parsed = parse_for_tokens(text)
     notes = notes_from_parsed(parsed, None)
@@ -250,16 +327,20 @@ def check(abc_path, bank_path, threshold=0.20):
     if not grams:
         return 'NOVELTY too-short-to-fingerprint'
     header, songs = load_bank(bank_path)
+    if threshold is None:
+        threshold = default_threshold(header)
+    # Rank by containment; matched beats break ties among equal containment.
     best = None
-    for sid, hs in songs:
-        starts = [i for h, i in grams if h in hs]
-        if not starts:
+    for sid, hs, tau in songs:
+        starts, den = match_song(grams, hs, tau)
+        if not starts or den <= 0:
             continue
-        containment = len(starts) / float(len(grams))
-        mb = matched_beats(notes, starts)
-        key = (containment, mb)
+        if tau is not None and len(starts) < MIN_SKETCH_MATCHES:
+            continue
+        containment = len(starts) / float(den)
+        key = (containment, matched_beats(notes, starts))
         if best is None or key > best[0]:
-            best = (key, sid, containment, mb)
+            best = (key, sid, containment, key[1])
     if best is None:
         return 'NOVELTY closest=none containment=0.000 matched=0.0 beats status=ok'
     _, sid, containment, mb = best
@@ -272,14 +353,17 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('abc', help='compiled song.abc')
     ap.add_argument('--assets', help='assets folder (default: ../assets beside this script)')
-    ap.add_argument('--threshold', type=float, default=0.05,
-                    help='containment at which the advisory says close (default: %(default)s)')
+    ap.add_argument('--threshold', type=float, default=None,
+                    help='containment at which the advisory says close '
+                         '(default: the value stamped in the bank header, else %.2f)' % DEFAULT_THRESHOLD)
+    ap.add_argument('--bank', help='fingerprint file (default: <assets>/corpus_fingerprints.bin)')
     args = ap.parse_args(argv)
     assets = Path(args.assets) if args.assets else Path(__file__).resolve().parent.parent / 'assets'
-    bank = assets / 'corpus_fingerprints.bin'
+    bank = Path(args.bank) if args.bank else assets / 'corpus_fingerprints.bin'
     if not bank.exists():
         print('NOVELTY unavailable (missing %s)' % bank)
         return 2
+    _need_repo_b()
     print(check(args.abc, bank, args.threshold))
     return 0
 
