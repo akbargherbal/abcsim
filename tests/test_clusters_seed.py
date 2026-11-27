@@ -77,11 +77,11 @@ def test_rescue_pairs():
         assert a is None or b is None or a['id'] != b['id']
 
 
-def test_keep_file_is_written_and_consistent():
+def test_keep_file_is_written_and_consistent(tmp_path):
     idx, pairs, res, val, z = _run()
     result = cluster_dups.build_clusters(idx, pairs, res, z, 50.0, 0.25, val)
-    info = cluster_dups.write_outputs(str(OUT), result, idx, pairs, res, z, val, 50.0, 0.25)
-    keep = (OUT / 'dedupe_keep.txt').read_text(encoding='utf-8').split()
+    info = cluster_dups.write_outputs(str(tmp_path), result, idx, pairs, res, z, val, 50.0, 0.25)
+    keep = (tmp_path / 'dedupe_keep.txt').read_text(encoding='utf-8').split()
     assert len(keep) == len(info['keep'])
     assert len(keep) == len(set(keep))
     assert sum(1 for s in SEED if s in keep) == 1
