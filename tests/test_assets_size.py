@@ -13,6 +13,7 @@ DEFAULT_FP = ASSETS / 'corpus_fingerprints.bin'
 FP_MAX_BYTES = {
     'corpus_fingerprints.bin': 700 * 1000,          # default = recommended bottom-256
     'alt/corpus_fingerprints.full.bin': 1100 * 1000,
+    'alt/corpus_fingerprints.k512.bin': 1050 * 1000,
     'alt/corpus_fingerprints.k128.bin': 360 * 1000,
     'alt/corpus_fingerprints.k64.bin': 210 * 1000,
 }

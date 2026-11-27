@@ -3,7 +3,7 @@
     {
       "file": "handoff/skill_0.2.3/assets/corpus_fingerprints.bin",
       "label": "bottom-256",
-      "bytes": 630365,
+      "bytes": 630382,
       "songs": 596,
       "hashes": 150037,
       "sketch": true,
@@ -75,7 +75,7 @@
     {
       "file": "handoff/skill_0.2.3/assets/alt/corpus_fingerprints.full.bin",
       "label": "full set",
-      "bytes": 1027894,
+      "bytes": 1027911,
       "songs": 596,
       "hashes": 249371,
       "sketch": false,
@@ -145,9 +145,9 @@
       ]
     },
     {
-      "file": "out/fp_variants/corpus_fingerprints.k512.bin",
+      "file": "handoff/skill_0.2.3/assets/alt/corpus_fingerprints.k512.bin",
       "label": "bottom-512",
-      "bytes": 984482,
+      "bytes": 984499,
       "songs": 596,
       "hashes": 238522,
       "sketch": true,
@@ -219,7 +219,7 @@
     {
       "file": "handoff/skill_0.2.3/assets/alt/corpus_fingerprints.k128.bin",
       "label": "bottom-128",
-      "bytes": 334795,
+      "bytes": 334812,
       "songs": 596,
       "hashes": 76205,
       "sketch": true,
@@ -303,7 +303,7 @@
     {
       "file": "handoff/skill_0.2.3/assets/alt/corpus_fingerprints.k64.bin",
       "label": "bottom-64",
-      "bytes": 181800,
+      "bytes": 181817,
       "songs": 596,
       "hashes": 38127,
       "sketch": true,
