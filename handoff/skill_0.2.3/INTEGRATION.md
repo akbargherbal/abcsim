@@ -30,9 +30,16 @@ Suggested filter for each lyric line:
 - `cadence_class` matches the line role: `sadr` -> `sadr`, `ajuz` -> `ajuz`.
 - `beats` matches the budget: 16 for a shatr (4 bars of 4/4), 8 for a short
   line. For 2/4 songs use the beat budget, not a bar count.
+- **Print 8-beat seeds only.** The shipped bank has 45 phrases at 8 beats and
+  only 3 at 16 beats (all three fit the byte budget), so a 16-beat request will
+  usually come back empty. If a 16-beat seed is offered, say it is one of three
+  and still check the bar sum.
 - `mode_hint` is compatible with the style maqam (`kurd-like`, `hijaz-like`,
   `nahawand-like`, `rast-like`, `bayati-like`, `saba-like`). If unsure, skip
-  the mode filter rather than forcing a mismatch.
+  the mode filter rather than forcing a mismatch. Mode coverage is uneven:
+  kurd/hijaz/rast have 8 phrases each, nahawand 15, bayati **1** (reported in
+  `counts.mode_shortfall`), so for a Bayati line fall back to `mode=any`
+  instead of forcing the single available phrase.
 - Prefer `register` `mid` or `high`; `low` is available but may sit under the
   verse register.
 
@@ -42,13 +49,19 @@ Print at most three, each one line, and cap the whole block at **400 bytes**:
 SEED P012 sadr 16 beats Gm  b3:.5 4:.5 5:1 4:.5 b3:.5 2:1 ...
 ```
 
+Every phrase carries `phrase_bytes` and `fits_seed_budget`; the bank was built
+with `--max-phrase-bytes 130`, so all 48 phrases fit the 130-byte seed budget
+and three seeds fit the 400-byte block with room to spare. The bank is
+`schema: "phrase_bank/2"`; the new fields are listed in its `grammar` block.
+
 The agent may use a seed as a starting phrase, or ignore it. Do not paste a
 seed into a bar without checking the bar sum and the line's syllable budget.
 
-The JSON is 32.1 KB and is loaded by the intake script, never pasted into the
-agent's context. Fields: `beats`, `phrase`, `end_degree`, `cadence_class`,
-`role_hint`, `mode_hint`, `source_id`, `source_bars`, `register`, `source_key`,
-`source_midi`, `cluster`, `id`.
+The JSON is 34.8 KB (34,788 bytes) and is loaded by the intake script, never
+pasted into the agent's context. Fields: `beats`, `phrase`, `end_degree`,
+`cadence_class`, `role_hint`, `mode_hint`, `source_id`, `source_bars`,
+`register`, `source_key`, `source_midi`, `cluster`, `id`, plus `phrase_bytes`
+and `fits_seed_budget` (schema 2).
 
 `role_hint` is heuristic: the corpus has no lyrics, so sadr/ajuz is inferred
 from cadence and phrase length only.
