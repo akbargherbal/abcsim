@@ -109,6 +109,11 @@ Threshold and false-positive rate for the shipped `bottom-256` default
 positives caught, 0 false positives on 2,968 unrelated pairs (max 0.0199) and 0
 false positives on 592 whole-bank unrelated queries (max 0.0640, p99 0.0414).
 
+These figures were reconfirmed in `handoff-0.2.3-r3` by running every positive through
+`novelty_check.check()` itself (the call above). Pin `handoff-0.2.3-r3` or later:
+`handoff-0.2.3-r2` has a broken `check()` (crash on sketch banks, silent `status=ok` on the
+full bank).
+
 ## 3. Candidate corpus profile: not adopted
 
 `assets/corpus_profile.dedup.candidate.json` is the Repo B profile mined from

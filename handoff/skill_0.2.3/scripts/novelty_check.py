@@ -247,15 +247,38 @@ def default_threshold(header):
 
 
 def prepare(grams):
-    """grams = [(hash, position)] -> {hash: [positions]} (each distinct n-gram once)."""
+    """grams = [(hash, position)] -> {hash: [positions]} (each distinct n-gram once).
+
+    This is the one canonical form every matching function below works on.
+    """
     by_hash = {}
     for h, i in grams:
         by_hash.setdefault(h, []).append(i)
     return by_hash
 
 
+def _prepared(prep):
+    """Return `prep` in prepared form ({hash: [positions]}).
+
+    Accepts either a prepared dict or the raw [(hash, position)] list that
+    composition_grams() returns, so callers cannot pass the wrong shape (the
+    raw list used to reach the estimator unconverted and either crashed or
+    silently matched nothing).  Anything else is rejected loudly.
+    """
+    if isinstance(prep, dict):
+        return prep
+    grams = list(prep)
+    if grams and not (isinstance(grams[0], (tuple, list)) and len(grams[0]) == 2):
+        raise TypeError('expected prepare() output or [(hash, position)] pairs, got %r'
+                        % (grams[0],))
+    return prepare(grams)
+
+
 def match_song(prep, hs, tau):
     """Match a composition against one bank song.
+
+    `prep` is prepare(grams) output (a raw [(hash, position)] list is also
+    accepted and prepared here).
 
     Containment counts each DISTINCT n-gram once: the share of the
     composition's distinct 8-grams that also occur in the bank song.  (Counting
@@ -266,6 +289,7 @@ def match_song(prep, hs, tau):
     comparable, so the denominator is the distinct n-grams <= tau (the standard
     bottom-k estimator).  Returns (matched_hashes, denominator).
     """
+    prep = _prepared(prep)
     if tau is None:
         den = len(prep)
         return [h for h in prep if h in hs], den
@@ -273,12 +297,22 @@ def match_song(prep, hs, tau):
     return [h for h in inr if h in hs], len(inr)
 
 
+def matched_positions(prep, matched):
+    """Token positions (n-gram start indices) of the matched hashes."""
+    prep = _prepared(prep)
+    return [i for h in matched for i in prep[h]]
+
+
 def best_match(prep, songs, tiebreak=None):
     """Return (containment, matched_hashes, song_id) for the closest bank song, or None.
+
+    This is the single ranking routine: check() and the calibration both go
+    through it, so the CLI cannot take a different path from the library.
 
     `tiebreak(matched_hashes)` (optional) ranks songs with equal containment,
     e.g. by matched beats.
     """
+    prep = _prepared(prep)
     best = None
     for sid, hs, tau in songs:
         matched, den = match_song(prep, hs, tau)
@@ -316,34 +350,35 @@ def matched_beats(notes, starts):
     return total
 
 
+def beats_tiebreak(notes, prep):
+    """Tiebreak for best_match(): matched beats, among songs of equal containment."""
+    return lambda matched: matched_beats(notes, matched_positions(prep, matched))
+
+
 def check(abc_path, bank_path, threshold=None):
+    """Return the one-line NOVELTY advisory for a compiled song.
+
+    The only public entry point for the CLI, the skill and the tests.
+    """
     text = Path(abc_path).read_text(encoding='utf-8')
     parsed = parse_for_tokens(text)
     notes = notes_from_parsed(parsed, None)
     tokens = tokens_from_notes(notes)
     if tokens is None:
         return 'NOVELTY too-short-to-fingerprint'
-    grams, ids = composition_grams(tokens)
+    grams, _ids = composition_grams(tokens)
     if not grams:
         return 'NOVELTY too-short-to-fingerprint'
     header, songs = load_bank(bank_path)
     if threshold is None:
         threshold = default_threshold(header)
+    prep = prepare(grams)
     # Rank by containment; matched beats break ties among equal containment.
-    best = None
-    for sid, hs, tau in songs:
-        starts, den = match_song(grams, hs, tau)
-        if not starts or den <= 0:
-            continue
-        if tau is not None and len(starts) < MIN_SKETCH_MATCHES:
-            continue
-        containment = len(starts) / float(den)
-        key = (containment, matched_beats(notes, starts))
-        if best is None or key > best[0]:
-            best = (key, sid, containment, key[1])
+    best = best_match(prep, songs, tiebreak=beats_tiebreak(notes, prep))
     if best is None:
         return 'NOVELTY closest=none containment=0.000 matched=0.0 beats status=ok'
-    _, sid, containment, mb = best
+    containment, matched, sid = best
+    mb = matched_beats(notes, matched_positions(prep, matched))
     status = 'close' if containment >= threshold else 'ok'
     return 'NOVELTY closest=%s containment=%.3f matched=%.1f beats status=%s' % (
         sid, containment, mb, status)

@@ -38,18 +38,29 @@ Whole-bank pairs >= 0.15 excluded from false-positive stats:
 - `suno-0381.abc` <-> `suno-0648.abc` (0.356): known vocal-only duplicate cluster C042 (missed by lead-only dedupe).
 - `suno-0105.abc` <-> `suno-0167.abc` (0.224): known vocal-only duplicate cluster C020 (missed by lead-only dedupe).
 
+## End-to-end check through `check()`
+
+Every positive member's ABC was also run through `novelty_check.check()` (the call the skill makes)
+at the threshold above. `check()` reports the closest song of the whole bank, so it may pick a song
+other than the representative; where it picks the representative its containment equals the
+estimator figure.
+
+| positives run | flagged `close` | closest = representative | of those, same containment | errors | scored below estimator |
+|---|---|---|---|---|---|
+| 47 | 45 | 46 | 46 | 0 | 0 |
+
 ## Repo B example song
 
-`assets/example_song.abc`:
+`assets/example_song.abc` (scored through `check()` when Repo B is available):
 
 ```
-NOVELTY not run
+NOVELTY closest=none containment=0.000 matched=0.0 beats status=ok
 ```
 
 ## Chosen threshold
 
 **containment >= 0.08** triggers the advisory. The maximum unrelated pair is
-0.0199 (whole-bank unrelated max 0.0640, worst 0.0640) and the example song is not scored, so the threshold sits
+0.0199 (whole-bank unrelated max 0.0640, worst 0.0640) and the example song is 0.000, so the threshold sits
 above the observed false-positive floor while still catching almost every cluster pair.
 
 ## Limitations

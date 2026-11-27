@@ -12,11 +12,26 @@ and a sketch hit also needs at least 3 matching n-grams.
 
 | variant | file size | hashes | positives caught @0.05 | recommended threshold | positives caught @rec | unrelated pairs: max / FP@rec | whole-bank unrelated best: max / p99 | Repo B example |
 |---|---|---|---|---|---|---|---|---|
-| bottom-256 | 616 KB | 150037 | 45 / 47 | **0.08** | 45 / 47 | 0.0199 / 0 | 0.0640 / 0.0414 | not scored |
-| full set | 1004 KB | 249371 | 46 / 47 | **0.08** | 45 / 47 | 0.0165 / 0 | 0.0554 / 0.0348 | not scored |
-| bottom-512 | 961 KB | 238522 | 46 / 47 | **0.08** | 45 / 47 | 0.0154 / 0 | 0.0529 / 0.0358 | not scored |
-| bottom-128 | 327 KB | 76205 | 45 / 47 | **0.15** | 43 / 47 | 0.0230 / 0 | 0.1014 / 0.0471 | not scored |
-| bottom-64 | 178 KB | 38127 | 46 / 47 | **0.15** | 43 / 47 | 0.0000 / 0 | 0.1034 / 0.0526 | not scored |
+| bottom-256 | 616 KB | 150037 | 45 / 47 | **0.08** | 45 / 47 | 0.0199 / 0 | 0.0640 / 0.0414 | 0.000 |
+| full set | 1004 KB | 249371 | 46 / 47 | **0.08** | 45 / 47 | 0.0165 / 0 | 0.0554 / 0.0348 | 0.000 |
+| bottom-512 | 961 KB | 238522 | 46 / 47 | **0.08** | 45 / 47 | 0.0154 / 0 | 0.0529 / 0.0358 | 0.000 |
+| bottom-128 | 327 KB | 76205 | 45 / 47 | **0.15** | 43 / 47 | 0.0230 / 0 | 0.1014 / 0.0471 | 0.000 |
+| bottom-64 | 178 KB | 38127 | 46 / 47 | **0.15** | 43 / 47 | 0.0000 / 0 | 0.1034 / 0.0526 | 0.000 |
+
+### End-to-end check through `check()`
+
+Every positive member's ABC is also run through `novelty_check.check()` (the call the skill makes), at the
+recommended threshold. `check()` reports the closest song of the whole bank, so it may legitimately pick a
+song other than the representative; where it does pick the representative its containment must equal the
+estimator figure.
+
+| variant | positives | flagged `close` by `check()` | closest = representative | of those, same containment | errors | scored below estimator |
+|---|---|---|---|---|---|---|
+| bottom-256 | 47 | 45 | 46 | 46 | 0 | 0 |
+| full set | 47 | 45 | 47 | 47 | 0 | 0 |
+| bottom-512 | 47 | 45 | 47 | 47 | 0 | 0 |
+| bottom-128 | 47 | 43 | 46 | 46 | 0 | 0 |
+| bottom-64 | 47 | 43 | 46 | 46 | 0 | 0 |
 
 ### Partial-copy sensitivity
 
@@ -70,11 +85,11 @@ precision on short songs for a much smaller package.
 
 ## Timing
 
-- bottom-256: not measured (Repo B not found)
-- full set: not measured (Repo B not found)
-- bottom-512: not measured (Repo B not found)
-- bottom-128: not measured (Repo B not found)
-- bottom-64: not measured (Repo B not found)
+- bottom-256: 0.05 s for check() on the Repo B example
+- full set: 0.05 s for check() on the Repo B example
+- bottom-512: 0.04 s for check() on the Repo B example
+- bottom-128: 0.02 s for check() on the Repo B example
+- bottom-64: 0.01 s for check() on the Repo B example
 
 ## Previous (0.2.3 handoff) numbers, kept for comparison
 

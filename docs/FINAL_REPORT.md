@@ -1,6 +1,7 @@
 # abcsim maintenance report: assets for abc-score-writer 0.2.3
 
-**Status:** Phases 1-7 implemented; **Revision 2 (`handoff-0.2.3-r2`)** fixes F1-F10.
+**Status:** Phases 1-7 implemented; **Revision 2 (`handoff-0.2.3-r2`)** fixes F1-F10;
+**Revision 3 (`handoff-0.2.3-r3`)** fixes the `novelty_check.check()` regression introduced in r2.
 Phase 2 and Phase 3 stop points were reviewed; Phase 2 listening confirmed all
 8 above-cut pairs as the same melody and exposed one weighted-alignment false
 negative, which is now handled by a narrow rescue pass. Repo B was not modified;
@@ -248,3 +249,19 @@ Revision 2 addresses integration issues F1–F10 identified against commit `9480
 | default `corpus_fingerprints.bin` | full set (1,027,894 B, 249,371 hashes) | `bottom-256` (630,382 B, 150,037 hashes) |
 | threshold / positives caught | `0.05` / 46 of 47 | `0.08` / 45 of 47 |
 | unrelated max / FP | pair max `0.0165`, 0 FP | pair max `0.0199` (0 FP), whole-bank max `0.0640` (0 FP; excludes vocal `C020`/`C042`) |
+
+## 12. Revision 3 (`handoff-0.2.3-r3`)
+
+Revision 3 fixes one defect in r2: `novelty_check.check()` passed raw `(hash, position)`
+tuples to `match_song()`, which expects `prepare()` output. Every sketch bank (default,
+`k512`, `k128`, `k64`) crashed with a `TypeError`, and the `full` bank silently reported
+`closest=none status=ok` for every song, including unmodified corpus songs. Details, the
+fix and the reconfirmed calibration are in `handoff/skill_0.2.3/HANDOFF_REVISION.md`.
+
+- `check()` now uses the same `best_match()` routine as the calibration; the matching
+  functions accept either input shape and reject anything else.
+- `tests/test_novelty.py` drives `check()` end to end on all five banks (positive and
+  negative controls, no exceptions, parity with `best_match()`, header thresholds, CLI).
+- The calibration was re-run and additionally pushed through `check()`: **45 of 47**
+  positives, whole-bank unrelated maximum **0.0640**, and every recommended threshold
+  (0.08 / 0.08 / 0.08 / 0.15 / 0.15) are unchanged. No asset file changed.

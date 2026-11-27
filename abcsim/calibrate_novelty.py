@@ -115,6 +115,68 @@ def entry_score(nc, prep, entry):
     return len(matched) / float(den)
 
 
+def parse_check_line(line):
+    """'NOVELTY closest=X containment=C matched=M beats status=S' -> dict, or None."""
+    if not line.startswith('NOVELTY closest='):
+        return None
+    f = dict(tok.split('=', 1) for tok in line.split() if '=' in tok)
+    return dict(closest=f['closest'], containment=float(f['containment']),
+                matched=float(f['matched']), status=f['status'])
+
+
+def check_path_crosscheck(nc, songs, pos_rows, bank_path, threshold):
+    """Run the runtime entry point nc.check() on every positive and compare.
+
+    The calibration scores songs with the estimator functions directly; the skill
+    only ever calls check().  A bug that lives only in check() (as the
+    check()/match_song() input-shape bug did) is invisible to the first and fatal to
+    the second, so every positive member's ABC is also pushed through check() with
+    the stamped/chosen threshold.
+
+    pos_rows = [(containment vs representative, cluster, member, representative)].
+    Returns None when Repo B's parser is unavailable.  Otherwise a dict:
+      flagged        members check() reports status=close
+      closest_rep    members whose closest song is their representative
+      agree          of those, how many print the same containment (3 decimals)
+      lower          members where check() scored BELOW the calibration (must be 0:
+                     check() reports the best song of the whole bank, so it can only
+                     be at least the member-vs-representative score)
+    """
+    if nc.parse_abc is None:
+        return None
+    import tempfile
+    out = dict(n=0, flagged=0, closest_rep=0, agree=0, lower=0, errors=0, problems=[])
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td) / 'member.abc'
+        for v, _cid, member, rep in pos_rows:
+            if member not in songs:
+                continue
+            tmp.write_text(songs[member]['abc'], encoding='utf-8', newline='\n')
+            out['n'] += 1
+            try:
+                r = parse_check_line(nc.check(tmp, bank_path, threshold))
+            except Exception as exc:          # noqa: BLE001 - count and report, never hide
+                out['errors'] += 1
+                out['problems'].append('%s: %s: %s' % (member, type(exc).__name__, exc))
+                continue
+            if r is None:
+                out['errors'] += 1
+                out['problems'].append('%s: unexpected check() output' % member)
+                continue
+            out['flagged'] += r['status'] == 'close'
+            if r['containment'] + 0.0006 < v:
+                out['lower'] += 1
+                out['problems'].append('%s: check() %.3f < calibration %.3f' % (member, r['containment'], v))
+            if r['closest'] == rep:
+                out['closest_rep'] += 1
+                if abs(r['containment'] - v) <= 0.0006:
+                    out['agree'] += 1
+                else:
+                    out['problems'].append('%s: check() %.3f != calibration %.3f vs %s' % (
+                        member, r['containment'], v, rep))
+    return out
+
+
 def known_related_pairs(outd):
     """Pairs abcsim's own similarity search ranked as related (out/top_pairs.csv,
     plus the listening/rescue pair lists).  They share real material, so a high
@@ -283,13 +345,16 @@ def run_variants(args, example_path):
 
         ex = None
         ex_time = None
-        if ex_grams:
+        if example_path and rb is not None and nc.parse_abc is not None:
+            # the real runtime path: the same call the skill makes
+            t0 = time.perf_counter()
+            ex_line = parse_check_line(nc.check(example_path, path, rec))
+            ex_time = time.perf_counter() - t0
+            ex = ex_line['containment'] if ex_line else None
+        elif ex_grams:
             b = nc.best_match(ex_grams, bank_songs)
             ex = b[0] if b else 0.0
-        if example_path and rb is not None and nc.parse_abc is not None:
-            t0 = time.perf_counter()
-            nc.check(example_path, path)
-            ex_time = time.perf_counter() - t0
+        crosscheck = check_path_crosscheck(nc, songs, pos_rows, path, rec)
 
         results.append(dict(
             file=str(path), label=label, bytes=Path(path).stat().st_size,
@@ -304,12 +369,16 @@ def run_variants(args, example_path):
             likely_related=[dict(containment=round(v, 3), query=q, closest=b) for v, q, b in sorted(likely_related, reverse=True)],
             neg_bank_p99=pct(neg_bank, 99), neg_bank_mean=(sum(neg_bank) / len(neg_bank)) if neg_bank else 0.0,
             neg_bank_fp_005=fp(neg_bank, 0.05), neg_bank_fp_rec=fp(neg_bank, rec),
-            example=ex, example_seconds=ex_time, partial_detect={str(k): v for k, v in partial.items()},
+            example=ex, example_seconds=ex_time, check_crosscheck=crosscheck, partial_detect={str(k): v for k, v in partial.items()},
             partial_trials=args.partial_trials,
             positive_misses_at_rec=[dict(containment=round(v, 3), cluster=c, member=m, representative=r)
                                     for v, c, m, r in sorted(pos_rows) if v < rec],
         ))
         print('   partial-copy detection @rec: ' + ', '.join('L=%d %.0f%%' % (k, 100 * v) for k, v in partial.items() if v is not None))
+        if crosscheck is not None:
+            print('   check() end-to-end: %d/%d positives flagged, %d/%d agree with the estimator, %d errors, %d scored lower' % (
+                crosscheck['flagged'], crosscheck['n'], crosscheck['agree'], crosscheck['closest_rep'],
+                crosscheck['errors'], crosscheck['lower']))
         print('%-10s %8d B  pos %d/%d @0.05, %d/%d @%.2f | pair max %.4f | bank max %.4f | example %s' % (
             label, results[-1]['bytes'], caught(0.05), len(pos), caught(rec), len(pos), rec,
             pair_max, bank_max, '%.3f' % ex if ex is not None else 'n/a'))
@@ -353,6 +422,20 @@ def run_variants(args, example_path):
             r['recommended_threshold'], r['caught_at_rec'], r['positives'],
             r['neg_pair_max'], r['neg_pair_fp_rec'], r['neg_bank_max'], r['neg_bank_p99'] or 0.0,
             ('%.3f' % r['example']) if r['example'] is not None else 'not scored'))
+    L += ['', '### End-to-end check through `check()`', '',
+          'Every positive member\'s ABC is also run through `novelty_check.check()` (the call the skill makes), at the',
+          'recommended threshold. `check()` reports the closest song of the whole bank, so it may legitimately pick a',
+          'song other than the representative; where it does pick the representative its containment must equal the',
+          'estimator figure.', '',
+          '| variant | positives | flagged `close` by `check()` | closest = representative | of those, same containment | errors | scored below estimator |',
+          '|---|---|---|---|---|---|---|']
+    for r in results:
+        cc = r['check_crosscheck']
+        if cc is None:
+            L.append('| %s | %d | not run (Repo B not found) | | | | |' % (r['label'], r['positives']))
+        else:
+            L.append('| %s | %d | %d | %d | %d | %d | %d |' % (
+                r['label'], cc['n'], cc['flagged'], cc['closest_rep'], cc['agree'], cc['errors'], cc['lower']))
     L += ['', '### Partial-copy sensitivity', '',
           'Detection rate at each variant\'s recommended threshold when a block of L consecutive n-grams of a bank',
           'song is spliced into an unrelated song (%d trials per L, same trials for every variant). One n-gram is about' % results[0]['partial_trials'],
@@ -413,6 +496,11 @@ def run_variants(args, example_path):
         L.append('- %s: %s' % (r['label'], ('%.2f s for check() on the Repo B example' % r['example_seconds'])
                                if r['example_seconds'] is not None else 'not measured (Repo B not found)'))
     L += ['', '## Previous (0.2.3 handoff) numbers, kept for comparison', '']
+    if prev and prev.get('bank', {}).get('sketch'):
+        # out/novelty_calibration.json is rewritten by every default-mode run, so by now it
+        # usually holds a sketch run, not the 0.2.3 baseline.  Keep the fixed 0.2.3 figures.
+        prev = dict(threshold=0.05, positives_at_or_above=46, positives=dict(n=47),
+                    false_positives=0, negatives=dict(n=2968, max=0.0165))
     if prev:
         prev_thr = prev.get('threshold', 0.05)
         L.append('Full set, set-based containment, %.2f threshold (from `out/novelty_calibration.json` before this revision): '
@@ -540,10 +628,21 @@ def main(argv=None):
     likely_related = [(v, q, b) for v, q, b in neg_bank_raw if v >= RELATED_FLOOR]
     neg_bank = [v for v, _q, _b in neg_bank_raw if v < RELATED_FLOOR]
 
-    # example
+    # check() end-to-end on every positive (None when Repo B's parser is unavailable)
+    crosscheck = check_path_crosscheck(nc, songs, positive_rows, args.bank, threshold)
+
+    # example: scored through check() (the runtime entry point) when Repo B is present
     example_line = 'not run'
     example_containment = None
-    if args.example and Path(args.example).exists():
+    if args.example and Path(args.example).exists() and nc.parse_abc is not None:
+        line = nc.check(args.example, args.bank, threshold)
+        r = parse_check_line(line)
+        if r is None:
+            example_line = line[len('NOVELTY '):] if line.startswith('NOVELTY ') else line
+        else:
+            example_line = line[len('NOVELTY '):]
+            example_containment = r['containment']
+    elif args.example and Path(args.example).exists():
         text = Path(args.example).read_text(encoding='utf-8')
         # use the same parser/tokenizer as the abcsim side for a reproducible number
         sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -599,6 +698,7 @@ def main(argv=None):
         whole_bank_false_positive_rate=bank_fp_rate,
         likely_related=rel_records,
         example=example_line, example_containment=example_containment,
+        check_crosscheck=crosscheck,
         positive_misses=[dict(containment=round(v, 3), cluster=c, member=m, representative=r)
                          for v, c, m, r in positive_rows if v < threshold])
 
@@ -667,9 +767,28 @@ def main(argv=None):
                     if item['vocal_cluster'] else 'unclustered pair >= %.2f' % RELATED_FLOOR)
             L.append('- `%s` <-> `%s` (%.3f): %s.' % (pair[0], pair[1], item['containment'], note))
     L.append('')
+    L.append('## End-to-end check through `check()`')
+    L.append('')
+    if crosscheck is None:
+        L.append('Not run: Repo B (abc_common.py) was not found, so `check()` could not parse songs.')
+    else:
+        L.append('Every positive member\'s ABC was also run through `novelty_check.check()` (the call the skill makes)')
+        L.append('at the threshold above. `check()` reports the closest song of the whole bank, so it may pick a song')
+        L.append('other than the representative; where it picks the representative its containment equals the')
+        L.append('estimator figure.')
+        L.append('')
+        L.append('| positives run | flagged `close` | closest = representative | of those, same containment | errors | scored below estimator |')
+        L.append('|---|---|---|---|---|---|')
+        L.append('| %d | %d | %d | %d | %d | %d |' % (
+            crosscheck['n'], crosscheck['flagged'], crosscheck['closest_rep'], crosscheck['agree'],
+            crosscheck['errors'], crosscheck['lower']))
+        for prob in crosscheck['problems'][:10]:
+            L.append('')
+            L.append('- PROBLEM: ' + prob)
+    L.append('')
     L.append('## Repo B example song')
     L.append('')
-    L.append('`assets/example_song.abc`:')
+    L.append('`assets/example_song.abc` (scored through `check()` when Repo B is available):')
     L.append('')
     L.append('```')
     L.append('NOVELTY ' + example_line)

@@ -1,3 +1,48 @@
+# Handoff Revision 3 (`handoff-0.2.3-r3`)
+
+**Pin this tag (or later).** `handoff-0.2.3-r2` ships a broken `novelty_check.py`; do not integrate it.
+
+- **Base:** tag `handoff-0.2.3-r2` (commit `fcbf23a`).
+- **Target revision:** Revision 3 (`handoff-0.2.3-r3`). One defect fixed; no change to any asset (`phrase_bank.json`, every `.bin` fingerprint bank and its stamped threshold are byte-identical to r2).
+- **Layout:** unchanged. File names under `handoff/skill_0.2.3/` are preserved.
+
+## The bug in r2
+
+`novelty_check.check()` passed the raw `(hash, position)` list from `composition_grams()` straight to `match_song()`, which expects `prepare(grams)` output (`{hash: [positions]}`); `best_match()` did it correctly. Result:
+
+| Bank | r2 behaviour |
+|---|---|
+| default (`bottom-256`), `k512`, `k128`, `k64` | `TypeError: '<=' not supported between instances of 'tuple' and 'int'` |
+| `full` | **silent false negative**: `closest=none containment=0.000 status=ok` even for an unmodified corpus song (a tuple is never `in` a set of ints) |
+
+`check()` also treated the matched hashes returned by `match_song()` as positions when computing `matched_beats`. The regression came with the sketch-estimator refactor; the suite missed it because calibration and tests only exercised `prepare()` + `match_song()` / `best_match()`, never `check()` on a real song.
+
+## What changed
+
+1. **`scripts/novelty_check.py`**
+   - `check()` now goes through `best_match()`: there is one ranking loop, shared by the CLI, the skill, the tests and the calibration. Matched beats are computed from the matched hashes' positions (`matched_positions(prep, matched)`), with `beats_tiebreak(notes, prep)` as the tie-breaker among equal containment.
+   - `match_song()`, `best_match()` and `matched_positions()` accept either `prepare()` output or a raw `[(hash, position)]` list (normalised by `_prepared()`; anything else raises `TypeError`), so this input-shape mix-up cannot recur. Return values are unchanged: `match_song` returns `(matched_hashes, denominator)` with the denominator the number of **distinct** hashes (at or below `tau` for a sketch).
+   - Definitions are unchanged: each distinct 8-gram counts once; sketches use the bottom-k estimator with `MIN_SKETCH_MATCHES = 3`.
+2. **`tests/test_novelty.py`** (+ new end-to-end tests, all calling `check()`): positive control (whole corpus song and a half-song vocal excerpt, `status=close`) on all five banks; negative control (Repo B `example_song.abc`, `status=ok`) on all five banks; no exceptions on any bank; `check()` vs `best_match()` parity on the sketch banks; each bank's stamped threshold applied when `--threshold` is not given (0.08 default / `full` / `k512`, 0.15 `k128` / `k64`), tested with an input scoring about 0.1 so the wrong threshold changes the status; the CLI prints exactly what `check()` returns; the script works as deployed beside `abc_common.py`. Without a Repo B checkout the positive controls still run (the two parsing hooks are pointed at abcsim's parser; everything after parsing is the real `check()`); the Repo B example, CLI and deployment tests skip.
+3. **`abcsim/calibrate_novelty.py`**: the Repo B example is now scored through `check()`, and every positive member is also run end-to-end through `check()` and compared with the estimator (new "End-to-end check through `check()`" tables in `docs/novelty_calibration.md` and `docs/fingerprint_options.md`). The "previous numbers" section no longer reads a file that every default run overwrites.
+
+## Calibration reconfirmed through the fixed `check()` path
+
+Run with `ABC_SCORE_COMPOSER` set. **All figures and all recommended thresholds are unchanged**, so no threshold was recomputed.
+
+| Bank | stamped threshold | positives flagged `close` by `check()` (of 47) | `check()` agrees with the estimator on the representative | Repo B example |
+|---|---|---|---|---|
+| `bottom-256` (default) | 0.08 | 45 | 46 / 46 | `0.000`, `status=ok` |
+| `full` | 0.08 | 45 | 47 / 47 | `0.000`, `status=ok` |
+| `k512` | 0.08 | 45 | 47 / 47 | `0.000`, `status=ok` |
+| `k128` | 0.15 | 43 | 46 / 46 | `0.000`, `status=ok` |
+| `k64` | 0.15 | 43 | 46 / 46 | `0.000`, `status=ok` |
+
+- Default bank: 45 of 47 positives, unrelated-pair max `0.0199` (0 FP), whole-bank unrelated max `0.0640` / p99 `0.0414` (0 FP) are reproduced exactly. The calibration's own estimator calls were already on the correct `prepare()` path, which is why the numbers hold; what was missing was proof that `check()` agrees with it, and that proof is now part of the calibration output and the test suite.
+- Positive control on `suno-0100.abc` (an unmodified corpus song): `closest=suno-0100.abc containment=1.000 status=close` on all five banks (r2: crash on four banks, `closest=none status=ok` on `full`).
+
+---
+
 # Handoff Revision 2 (`handoff-0.2.3-r2`)
 
 - **Base commit (initial 0.2.3 handoff):** `9480245` ("Add project README")

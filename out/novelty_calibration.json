@@ -73,8 +73,17 @@
       "vocal_cluster": "C020"
     }
   ],
-  "example": "not run",
-  "example_containment": null,
+  "example": "closest=none containment=0.000 matched=0.0 beats status=ok",
+  "example_containment": 0.0,
+  "check_crosscheck": {
+    "n": 47,
+    "flagged": 45,
+    "closest_rep": 46,
+    "agree": 46,
+    "lower": 0,
+    "errors": 0,
+    "problems": []
+  },
   "positive_misses": [
     {
       "containment": 0.0,
